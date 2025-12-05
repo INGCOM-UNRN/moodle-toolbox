@@ -1,0 +1,303 @@
+# Moodle Toolbox .gitignore
+
+# ============================================================================
+# Python
+# ============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================================================
+# Backups de Scripts (generados automáticamente)
+# ============================================================================
+
+# Backups creados por los scripts
+*.bak
+*.backup
+*.old
+*~
+
+# Directorios temporales de backups
+backups/
+backup/
+.backups/
+
+# ============================================================================
+# Archivos de Trabajo y Temporales
+# ============================================================================
+
+# Archivos temporales
+*.tmp
+*.temp
+.tmp/
+.temp/
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Informes generados
+informe*.txt
+report*.txt
+duplicados*.sh
+resolve_duplicates*.sh
+
+# ============================================================================
+# Archivos de Moodle/GIFT
+# ============================================================================
+
+# Archivos XML y GIFT temporales (descomenta si no quieres versionar tus preguntas)
+# *.xml
+# *.gift
+
+# Directorios de trabajo temporal
+preguntas_temp/
+temp_questions/
+converted/
+conversion_temp/
+
+# Archivos de prueba
+test_*.xml
+test_*.gift
+prueba_*.xml
+prueba_*.gift
+ejemplo_*.xml
+ejemplo_*.gift
+
+# ============================================================================
+# Outputs y Resultados
+# ============================================================================
+
+# Directorios de salida
+output/
+out/
+outputs/
+converted_output/
+
+# Informes y análisis
+*_informe.txt
+*_report.txt
+*_analysis.txt
+similares.txt
+duplicados.txt
+
+# ============================================================================
+# Sistema Operativo
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# ============================================================================
+# Editores
+# ============================================================================
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# ============================================================================
+# Específico del Proyecto
+# ============================================================================
+
+# Directorios de ejemplos temporales (mantener ejemplos/ permanente)
+ejemplos_temp/
+ejemplos_backup/
+
+# Scripts de consolidación/migración temporal
+migrate_*.py
+consolidate_*.py
+*_deprecated.py
+
+# Notas personales
+NOTES.md
+TODO_personal.md
+IDEAS.md
+
+# Configuración local
+config.local.py
+settings.local.py
+.env
+.env.local
+
+# ============================================================================
+# Git
+# ============================================================================
+
+# Parches y diffs
+*.patch
+*.diff
+
+# ============================================================================
+# Compresión
+# ============================================================================
+
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+*.bz2
+*.gz
+
+# ============================================================================
+# Meld y herramientas de diff
+# ============================================================================
+
+# Archivos temporales de Meld
+*.orig
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+*_BACKUP_*
+*_BASE_*
+*_LOCAL_*
+*_REMOTE_*
+
+# ============================================================================
+# Documentación Temporal
+# ============================================================================
+
+# Borradores de documentación
+*_draft.md
+*_borrador.md
+DRAFT_*.md
+
+# Documentación generada automáticamente (si aplica)
+# docs/_build/
+# docs/.doctrees/
+
+# ============================================================================
+# Bases de Datos (si se agregan en el futuro)
+# ============================================================================
+
+*.db
+*.sqlite
+*.sqlite3
+
+# ============================================================================
+# Otros
+# ============================================================================
+
+# Archivos de caché de Python
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Instalación local de paquetes
+.Python
+env/
