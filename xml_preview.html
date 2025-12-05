@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visor de Cuestionarios Moodle XML</title>
+    
+    <!-- Librería para procesar Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Librerías para resaltado de sintaxis (highlight.js) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <style>
+        :root {
+            --border-color: #ddd;
+            --card-bg: #fff;
+            --text-color: #333;
+            --category-bg: #f0f7ff;
+            --category-border: #b3d4fc;
+            --correct-answer-bg: #e6ffed;
+            --correct-answer-border: #b7e1c1;
+            --code-bg: #f6f8fa;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f4f9;
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+
+        h1 {
+            color: #444;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        #xmlFile {
+            padding: 8px;
+        }
+
+        #quiz-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .question-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            break-inside: avoid; /* Evita saltos de página dentro de una pregunta al imprimir */
+        }
+
+        .question-card h3 {
+            margin-top: 0;
+            color: #005a9c;
+        }
+
+        .category-badge {
+            display: inline-block;
+            background-color: var(--category-bg);
+            border: 1px solid var(--category-border);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin-bottom: 15px;
+            color: #005a9c;
+        }
+
+        .question-text p:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* Estilos para bloques de código */
+        .question-text pre, .answers pre {
+            background-color: var(--code-bg);
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            white-space: pre-wrap; /* Ajuste de línea para código largo */
+            word-wrap: break-word;
+        }
+        
+        .question-text code, .answers code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 0.9em;
+        }
+
+        .answers {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .answers li {
+            padding: 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            margin-bottom: 4px;
+        }
+
+        /* Estilo para la respuesta correcta, activado con ?answers=true */
+        .answers li.correct-answer {
+            background-color: var(--correct-answer-bg);
+            border-color: var(--correct-answer-border);
+            font-weight: bold;
+        }
+        
+        #instructions {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        /* Estilos específicos para la impresión */
+        @media print {
+            body {
+                padding: 0;
+                background-color: #fff;
+            }
+            header, .controls, #instructions {
+                display: none; /* Ocultar controles al imprimir */
+            }
+            #quiz-container {
+                max-width: 100%;
+                margin: 0;
+                box-shadow: none;
+            }
+            .question-card {
+                page-break-after: always; /* Cada pregunta en una página nueva */
+                box-shadow: none;
+                border: 1px solid #ccc;
+            }
+            .question-card:last-of-type {
+                page-break-after: auto; /* Evitar página en blanco al final */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Visor de Cuestionarios Moodle (XML)</h1>
+        <p>Carga un archivo XML para previsualizar las preguntas del banco de preguntas.</p>
+    </header>
+
+    <div class="controls">
+        <input type="file" id="xmlFile" accept=".xml">
+    </div>
+
+    <div id="quiz-container">
+        <div id="instructions">
+            <p><strong>Instrucciones:</strong></p>
+            <ul>
+                <li>Selecciona un archivo XML exportado desde Moodle para empezar.</li>
+                <li>Para <strong>mezclar las preguntas</strong>, añade <code>?mix=true</code> a la URL de esta página.</li>
+                <li>Para <strong>mostrar las respuestas correctas</strong>, añade <code>?answers=true</code> a la URL.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileInput = document.getElementById('xmlFile');
+            const quizContainer = document.getElementById('quiz-container');
+
+            // --- Configuración de highlight.js para que se ejecute en los bloques de código ---
+            marked.setOptions({
+                highlight: function(code, lang) {
+                    const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                    return hljs.highlight(code, { language }).value;
+                }
+            });
+
+            // --- Lógica de Parámetros de URL ---
+            const urlParams = new URLSearchParams(window.location.search);
+            const shouldShuffle = urlParams.get('mix') === 'true';
+            const showAnswers = urlParams.get('answers') === 'true';
+
+            fileInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => renderQuiz(e.target.result);
+                reader.onerror = () => alert('Error al leer el archivo.');
+                reader.readAsText(file);
+            });
+
+            /**
+             * Parsea de forma segura un texto en Markdown. Si falla, devuelve el texto original.
+             * @param {string} text - El texto a parsear.
+             * @returns {string} - El HTML resultante o el texto original si hay un error.
+             */
+            function safeMarkedParse(text) {
+                try {
+                    // Usamos 'marked.parse' que es la función recomendada en versiones recientes.
+                    // El 'inline: false' asegura que se procesen bloques completos (párrafos, listas, etc.).
+                    return marked.parse(text || '', { gfm: true, breaks: true });
+                } catch (e) {
+                    console.error("Error al parsear Markdown:", e);
+                    // Si falla, devolvemos el texto original escapando HTML para seguridad.
+                    const escapedText = document.createElement('div');
+                    escapedText.innerText = text;
+                    return escapedText.innerHTML;
+                }
+            }
+            
+            /**
+             * Parsea el contenido de texto del XML y lo renderiza en el contenedor.
+             * @param {string} xmlText El contenido del archivo XML como texto.
+             */
+            function renderQuiz(xmlText) {
+                quizContainer.innerHTML = ''; // Limpiar contenido anterior
+
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, "application/xml");
+
+                if (xmlDoc.querySelector("parsererror")) {
+                    quizContainer.innerHTML = `<p style="color: red;">Error: El archivo no es un XML válido.</p>`;
+                    return;
+                }
+
+                let questions = Array.from(xmlDoc.querySelectorAll("quiz > question"));
+
+                if (shouldShuffle) {
+                    for (let i = questions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [questions[i], questions[j]] = [questions[j], questions[i]];
+                    }
+                }
+
+                let currentCategory = 'General';
+
+                questions.forEach((question) => {
+                    const type = question.getAttribute('type');
+
+                    if (type === 'category') {
+                        currentCategory = question.querySelector('category > text')?.textContent.trim() || 'General';
+                        return; // Es una categoría, la guardamos y continuamos.
+                    }
+                    
+                    if (type === 'multichoice') {
+                        const card = document.createElement('div');
+                        card.className = 'question-card';
+
+                        const questionName = question.querySelector('name > text')?.textContent || 'Pregunta sin nombre';
+                        const questionTextContent = question.querySelector('questiontext > text')?.textContent || '';
+                        
+                        const answers = Array.from(question.querySelectorAll('answer')).map(ans => ({
+                            text: ans.querySelector('text')?.textContent || '',
+                            isCorrect: (parseInt(ans.getAttribute('fraction'), 10) || 0) > 0,
+                        }));
+                        
+                        let answersHtml = answers.map(answer => {
+                            const correctClass = showAnswers && answer.isCorrect ? 'correct-answer' : '';
+                            return `<li class="${correctClass}">${safeMarkedParse(answer.text)}</li>`;
+                        }).join('');
+
+                        card.innerHTML = `
+                            <div class="category-badge">Categoría: ${currentCategory}</div>
+                            <h3>${safeMarkedParse(questionName)}</h3>
+                            <div class="question-text">${safeMarkedParse(questionTextContent)}</div>
+                            <ul class="answers">${answersHtml}</ul>
+                        `;
+                        
+                        quizContainer.appendChild(card);
+                    }
+                });
+
+                if (quizContainer.childElementCount === 0) {
+                     quizContainer.innerHTML = `<p>No se encontraron preguntas de tipo 'multichoice' en el archivo.</p>`;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
