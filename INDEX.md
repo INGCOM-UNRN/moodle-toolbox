@@ -55,6 +55,9 @@ moodle_toolbox/
 
 ### Quiero analizar mi banco de preguntas
 
+Nota: Estas herramientas están pensadas para trabajar con repositorios en las que hay una pregunta por archivo, como lo que genera
+[Reorganizer](https://github.com/INGCOM-UNRN/moodle-reorganizer)
+
 | Objetivo | Script | Documentación |
 |----------|--------|---------------|
 | Encontrar duplicados en 1 archivo | [find_similar_questions.py](find_similar_questions.py) | [README_scripts.md](README_scripts.md#1-find_similar_questionspy) |

@@ -2,6 +2,15 @@
 
 Conjunto de herramientas en Python para trabajar con preguntas de Moodle en formatos XML y GIFT. Facilita la conversión, análisis, limpieza y mantenimiento de bancos de preguntas.
 
+Aunque estas herramientas pueden funcionar con cualquier backup, en su mayoria están pensadas para ser utilizadas con lo que genera
+[Reorganizer](https://github.com/INGCOM-UNRN/moodle-reorganizer), en donde hay una pregunta por archivo.
+
+## 🏷️ Tagging
+
+Algo que fue descubierto en el desarrollo de estas herramientas, es que el tagging, al menos en el Moodle que se utiliza, no se
+restaura junto al banco de preguntas y provoca fallos cuando la etiqueta _no estaba creada de antemano_, lo que hace que su uso
+sea, de momento, poco práctico, al menos, hasta que se puedan crear de forma automática.
+
 ## 📋 Índice
 
 - [Instalación](#instalación)
