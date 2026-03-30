@@ -89,7 +89,7 @@ def process_xml_file(filepath):
 
 def main():
     """Main function to process all XML files."""
-    preguntas_dir = Path('./preguntas')
+    preguntas_dir = Path('./originales')
     
     if not preguntas_dir.exists():
         print(f"Directory {preguntas_dir} does not exist!")

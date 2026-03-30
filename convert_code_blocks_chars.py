@@ -154,14 +154,15 @@ def process_xml_cdata(text: str, to_normal: bool = True) -> tuple[str, int]:
     return text, total_blocks
 
 
-def process_file(file_path: str, to_normal: bool = True, backup: bool = True, dry_run: bool = False) -> int:
+def process_file(file_path: str, dest_path: str = None, to_normal: bool = True, backup: bool = True, dry_run: bool = False) -> int:
     """
     Procesa un archivo individual.
     
     Args:
-        file_path: Ruta al archivo
+        file_path: Ruta al archivo origen
+        dest_path: Ruta al archivo destino (si None, modifica in-place)
         to_normal: True para fullwidth->normal, False para normal->fullwidth
-        backup: Si True, crea un backup antes de modificar
+        backup: Si True, crea un backup antes de modificar (solo si in-place)
         dry_run: Si True, solo muestra qué se haría sin modificar
     
     Returns:
@@ -177,10 +178,32 @@ def process_file(file_path: str, to_normal: bool = True, backup: bool = True, dr
         else:
             converted_content, blocks_modified = convert_markdown_code_blocks(original_content, to_normal)
         
-        if blocks_modified > 0:
-            if dry_run:
-                return blocks_modified
+        # Determinar si hay cambios efectivos
+        has_changes = blocks_modified > 0
+        
+        if dry_run:
+            return blocks_modified
+
+        # Si hay destino, escribimos allí
+        if dest_path:
+            dest = Path(dest_path)
+            # Crear directorios padres si es necesario
+            dest.parent.mkdir(parents=True, exist_ok=True)
             
+            # Si hay cambios, escribir contenido convertido
+            if has_changes:
+                with open(dest, 'w', encoding='utf-8') as f:
+                    f.write(converted_content)
+                return blocks_modified
+            else:
+                # Si no hay cambios, copiamos el original al destino
+                # (para mantener estructura en copias recursivas)
+                import shutil
+                shutil.copy2(file_path, dest)
+                return 0
+        
+        # Si es in-place (no dest_path)
+        if has_changes:
             if backup:
                 backup_path = Path(file_path).with_suffix(Path(file_path).suffix + '.bak')
                 with open(backup_path, 'w', encoding='utf-8') as f:
@@ -199,35 +222,31 @@ def process_file(file_path: str, to_normal: bool = True, backup: bool = True, dr
         raise
 
 
-def process_directory(directory: str, extensions: list, to_normal: bool = True, 
+def process_directory(source_dir: str, dest_dir: str = None, extensions: list = None, to_normal: bool = True, 
                      recursive: bool = False, backup: bool = True, dry_run: bool = False):
     """
     Procesa archivos en un directorio.
-    
-    Args:
-        directory: Directorio a procesar
-        extensions: Lista de extensiones de archivo a procesar
-        to_normal: True para fullwidth->normal, False para normal->fullwidth
-        recursive: Si True, procesa subdirectorios recursivamente
-        backup: Si True, crea backups antes de modificar
-        dry_run: Si True, solo muestra qué se haría sin modificar
     """
-    dir_path = Path(directory)
+    if extensions is None:
+        extensions = ['gift', 'md']
+
+    source_path = Path(source_dir)
+    dest_path = Path(dest_dir) if dest_dir else None
     
-    if not dir_path.exists():
-        print(f"Error: Directorio no encontrado: {directory}", file=sys.stderr)
+    if not source_path.exists():
+        print(f"Error: Directorio no encontrado: {source_dir}", file=sys.stderr)
         return
     
     # Encontrar todos los archivos con las extensiones especificadas
     files = []
     for ext in extensions:
         if recursive:
-            files.extend(dir_path.rglob(f'*.{ext}'))
+            files.extend(source_path.rglob(f'*.{ext}'))
         else:
-            files.extend(dir_path.glob(f'*.{ext}'))
+            files.extend(source_path.glob(f'*.{ext}'))
     
     if not files:
-        print(f"No se encontraron archivos con extensiones {extensions} en {directory}")
+        print(f"No se encontraron archivos con extensiones {extensions} en {source_dir}")
         return
     
     direction = "fullwidth → normal" if to_normal else "normal → fullwidth"
@@ -244,17 +263,34 @@ def process_directory(directory: str, extensions: list, to_normal: bool = True,
     
     for file_path in files:
         try:
-            blocks_modified = process_file(str(file_path), to_normal, backup, dry_run)
+            # Calcular ruta destino si existe
+            current_dest = None
+            if dest_path:
+                rel_path = file_path.relative_to(source_path)
+                current_dest = dest_path / rel_path
+
+            blocks_modified = process_file(str(file_path), str(current_dest) if current_dest else None, 
+                                         to_normal, backup, dry_run)
             
             if blocks_modified > 0:
+                msg = f"✓ Modificados {blocks_modified} bloques de código en: {file_path}"
+                if current_dest:
+                    msg += f" -> {current_dest}"
+                
                 if dry_run:
-                    print(f"[DRY-RUN] Se modificarían {blocks_modified} bloques en: {file_path}")
+                    print(f"[DRY-RUN] {msg}")
                 else:
-                    print(f"✓ Modificados {blocks_modified} bloques de código en: {file_path}")
+                    print(msg)
+                    
                 files_modified_count += 1
                 total_blocks_modified += blocks_modified
             else:
-                print(f"○ Sin cambios necesarios: {file_path}")
+                if dry_run and current_dest:
+                    print(f"[DRY-RUN] Copiar sin cambios: {file_path} -> {current_dest}")
+                elif current_dest:
+                     print(f"Copiado sin cambios: {file_path} -> {current_dest}")
+                else:
+                    print(f"○ Sin cambios necesarios: {file_path}")
                 files_unchanged_count += 1
                 
         except Exception as e:
@@ -280,23 +316,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
-  # Ver qué archivos se modificarían (conversión a normal)
-  %(prog)s -d ./preguntas --dry-run
+  # Ver qué archivos se modificarían (conversión a normal) en el directorio actual
+  %(prog)s . --dry-run
+  
+  # Convertir directorio 'preguntas' y guardar en 'preguntas_fixed'
+  %(prog)s ./preguntas ./preguntas_fixed --recursive
+  
+  # Convertir archivo individual
+  %(prog)s pregunta.gift --to-normal
   
   # Convertir fullwidth a normal en archivos .gift
-  %(prog)s -d ./preguntas --to-normal
-  
-  # Convertir normal a fullwidth en archivos .md
-  %(prog)s -d ./docs --to-fullwidth -e md
-  
-  # Procesar recursivamente múltiples extensiones
-  %(prog)s -d ./preguntas -r -e gift md xml --to-normal
-  
-  # Procesar un archivo individual
-  %(prog)s -f pregunta.gift --to-normal
-  
-  # Sin crear backup
-  %(prog)s -f pregunta.gift --to-normal --no-backup
+  %(prog)s ./preguntas --to-normal -e gift
 
 Conversiones soportadas:
   Caracteres fullwidth ↔ normales:
@@ -304,56 +334,80 @@ Conversiones soportadas:
   
   Entidades XML ↔ fullwidth:
     &lt; ↔ ＜, &gt; ↔ ＞, &amp; ↔ ＆, &quot; ↔ ＂, etc.
-
-Nota: Solo se modifican caracteres dentro de bloques de código (``` y `)
         """
     )
     
-    parser.add_argument('-d', '--directory', help='Directorio a procesar')
-    parser.add_argument('-f', '--file', help='Archivo individual a procesar')
-    parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
+    parser.add_argument('source', help='Archivo o directorio origen')
+    parser.add_argument('destination', nargs='?', help='Archivo o directorio destino (opcional)')
+    
+    parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente (si source es directorio)')
     parser.add_argument('-e', '--extensions', nargs='+', default=['gift', 'md'], 
                        help='Extensiones de archivo a procesar (default: gift md)')
     parser.add_argument('--to-normal', action='store_true', help='Convertir fullwidth a caracteres normales (default)')
     parser.add_argument('--to-fullwidth', action='store_true', help='Convertir caracteres normales a fullwidth')
-    parser.add_argument('--no-backup', action='store_true', help='No crear archivos de backup')
+    parser.add_argument('--no-backup', action='store_true', help='No crear archivos de backup (solo si in-place)')
     parser.add_argument('--dry-run', action='store_true', help='Mostrar qué se haría sin realizar cambios')
+    
+    # Backward compatibility flags (opcional, pero buena práctica si se usan en scripts existentes)
+    parser.add_argument('-d', '--directory', help=argparse.SUPPRESS) # Deprecated
+    parser.add_argument('-f', '--file', help=argparse.SUPPRESS)      # Deprecated
     
     args = parser.parse_args()
     
-    # Validar argumentos
-    if not args.directory and not args.file:
-        parser.error("Debe especificar --directory o --file")
-    
-    if args.directory and args.file:
-        parser.error("No puede especificar --directory y --file simultáneamente")
-    
-    if args.to_normal and args.to_fullwidth:
-        parser.error("No puede especificar --to-normal y --to-fullwidth simultáneamente")
-    
+    # Handle deprecated flags if positional args are missing
+    if not args.source:
+        if args.directory:
+            args.source = args.directory
+        elif args.file:
+            args.source = args.file
+        else:
+            parser.error("Debe especificar source")
+
     # Determinar dirección de conversión (por defecto: to_normal)
     to_normal = not args.to_fullwidth
     
+    if args.to_normal and args.to_fullwidth:
+        parser.error("No puede especificar --to-normal y --to-fullwidth simultáneamente")
+
+    source_path = Path(args.source)
+    
     try:
-        if args.file:
+        if source_path.is_file():
             # Procesar archivo individual
-            blocks = process_file(args.file, to_normal, backup=not args.no_backup, dry_run=args.dry_run)
+            blocks = process_file(
+                str(source_path), 
+                args.destination, 
+                to_normal, 
+                backup=not args.no_backup, 
+                dry_run=args.dry_run
+            )
             
             direction = "fullwidth → normal" if to_normal else "normal → fullwidth"
             
             if blocks > 0:
                 if args.dry_run:
-                    print(f"[DRY-RUN] Se modificarían {blocks} bloques de código en: {args.file}")
+                    print(f"[DRY-RUN] Se modificarían {blocks} bloques de código en: {source_path}")
                     print(f"Dirección: {direction}")
                 else:
-                    print(f"✓ Modificados {blocks} bloques de código en: {args.file}")
+                    print(f"✓ Modificados {blocks} bloques de código en: {source_path}")
                     print(f"Dirección: {direction}")
             else:
-                print(f"○ No se encontraron bloques de código que modificar en: {args.file}")
-        else:
+                print(f"○ No se encontraron bloques de código que modificar en: {source_path}")
+                
+        elif source_path.is_dir():
             # Procesar directorio
-            process_directory(args.directory, args.extensions, to_normal, 
-                            args.recursive, not args.no_backup, args.dry_run)
+            process_directory(
+                str(source_path), 
+                args.destination, 
+                args.extensions, 
+                to_normal, 
+                args.recursive, 
+                not args.no_backup, 
+                args.dry_run
+            )
+        else:
+            print(f"Error: Source no encontrado: {source_path}", file=sys.stderr)
+            return 1
     
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

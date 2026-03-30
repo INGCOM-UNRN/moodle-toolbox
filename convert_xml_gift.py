@@ -253,8 +253,8 @@ def gift_to_xml(gift_path: str, output_path: str = None) -> str:
     while i < len(lines):
         line = lines[i]
         
-        # Buscar inicio de pregunta
-        if '::' in line and '[markdown]' in line:
+        # Buscar inicio de pregunta (:: al inicio de línea)
+        if line.strip().startswith('::') and '::' in line[2:]:
             # Capturar comentarios previos
             comments = []
             j = i - 1
@@ -296,10 +296,10 @@ def gift_to_xml(gift_path: str, output_path: str = None) -> str:
         comments = q_data['comments']
         q_content = q_data['content']
         
-        # Parsear el contenido de la pregunta con un patrón más permisivo
-        match = re.match(r'::(.*?)::\[markdown\](.*?)\{(.+)\}', q_content, re.DOTALL)
+        # Parsear el contenido de la pregunta con [markdown] opcional
+        match = re.match(r'::(.*?)::(?:\[markdown\])?(.*?)\{(.+)\}', q_content, re.DOTALL)
         if not match:
-            print(f"Advertencia: No se pudo parsear pregunta")
+            print(f"Advertencia: No se pudo parsear pregunta: {q_content[:100]}")
             continue
         
         name = match.group(1).strip()
@@ -425,7 +425,7 @@ def format_xml(xml_str: str) -> str:
         return xml_str
 
 
-def convert_file(input_path: str, output_path: str = None, to_gift: bool = True):
+def convert_file(input_path: str, output_path: str = None, to_gift: bool = True, dry_run: bool = False):
     """
     Convierte un archivo individual.
     
@@ -433,6 +433,7 @@ def convert_file(input_path: str, output_path: str = None, to_gift: bool = True)
         input_path: Archivo de entrada
         output_path: Archivo de salida (opcional)
         to_gift: True para XML->GIFT, False para GIFT->XML
+        dry_run: Si True, solo simula la operación
     """
     input_path = Path(input_path)
     
@@ -449,17 +450,29 @@ def convert_file(input_path: str, output_path: str = None, to_gift: bool = True)
     output_path = Path(output_path)
     
     # Realizar conversión
+    direction = "XML -> GIFT" if to_gift else "GIFT -> XML"
+    
+    if dry_run:
+        print(f"[DRY-RUN] Convertiría {input_path} -> {output_path} ({direction})")
+        return
+
+    print(f"Convirtiendo {input_path} -> {output_path} ({direction})")
+    
+    # Crear directorios padres si es necesario
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     if to_gift:
-        print(f"Convirtiendo {input_path} -> {output_path} (XML -> GIFT)")
-        xml_to_gift(str(input_path), str(output_path))
+        content = xml_to_gift(str(input_path))
     else:
-        print(f"Convirtiendo {input_path} -> {output_path} (GIFT -> XML)")
-        gift_to_xml(str(input_path), str(output_path))
+        content = gift_to_xml(str(input_path))
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(content)
     
     print(f"✓ Conversión completada: {output_path}")
 
 
-def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True):
+def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True, dry_run: bool = False):
     """
     Convierte todos los archivos en un directorio preservando la estructura.
     
@@ -467,6 +480,7 @@ def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True):
         input_dir: Directorio de entrada
         output_dir: Directorio de salida
         to_gift: True para XML->GIFT, False para GIFT->XML
+        dry_run: Si True, solo simula la operación
     """
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
@@ -486,6 +500,8 @@ def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True):
         return
     
     print(f"Encontrados {len(files)} archivos para convertir")
+    if dry_run:
+        print("=== MODO DRY-RUN ===")
     
     converted = 0
     errors = []
@@ -496,14 +512,22 @@ def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True):
             rel_path = file_path.relative_to(input_dir)
             out_path = output_dir / rel_path.with_suffix(new_extension)
             
+            if dry_run:
+                print(f"[DRY-RUN] {rel_path} -> {out_path}")
+                converted += 1
+                continue
+            
             # Crear directorio de salida si no existe
             out_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Convertir archivo
             if to_gift:
-                xml_to_gift(str(file_path), str(out_path))
+                content = xml_to_gift(str(file_path))
             else:
-                gift_to_xml(str(file_path), str(out_path))
+                content = gift_to_xml(str(file_path))
+            
+            with open(out_path, 'w', encoding='utf-8') as f:
+                f.write(content)
             
             converted += 1
             print(f"✓ [{converted}/{len(files)}] {rel_path}")
@@ -514,7 +538,7 @@ def convert_directory(input_dir: str, output_dir: str, to_gift: bool = True):
     
     print(f"\n{'='*60}")
     print(f"Conversión masiva completada:")
-    print(f"  - Archivos convertidos: {converted}/{len(files)}")
+    print(f"  - Archivos {'procesados' if dry_run else 'convertidos'}: {converted}/{len(files)}")
     print(f"  - Errores: {len(errors)}")
     
     if errors:
@@ -529,43 +553,54 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Ejemplos de uso:
-  # Convertir XML a GIFT
-  %(prog)s -i pregunta.xml -o pregunta.gift
-  
-  # Convertir GIFT a XML
-  %(prog)s -i pregunta.gift -o pregunta.xml
+  # Convertir XML a GIFT (archivo)
+  %(prog)s pregunta.xml pregunta.gift
   
   # Conversión masiva XML -> GIFT preservando estructura
-  %(prog)s -d ./preguntas_xml -o ./preguntas_gift --to-gift
+  %(prog)s ./preguntas_xml ./preguntas_gift --to-gift
   
-  # Conversión masiva GIFT -> XML preservando estructura
-  %(prog)s -d ./preguntas_gift -o ./preguntas_xml --to-xml
+  # Dry run para ver qué pasaría
+  %(prog)s ./preguntas_xml ./preguntas_gift --dry-run
         """
     )
     
-    parser.add_argument('-i', '--input', help='Archivo de entrada')
-    parser.add_argument('-o', '--output', help='Archivo/directorio de salida')
-    parser.add_argument('-d', '--directory', help='Directorio para conversión masiva')
+    parser.add_argument('source', nargs='?', help='Archivo o directorio de entrada')
+    parser.add_argument('destination', nargs='?', help='Archivo o directorio de salida')
+    
     parser.add_argument('--to-gift', action='store_true', help='Forzar conversión a GIFT')
     parser.add_argument('--to-xml', action='store_true', help='Forzar conversión a XML')
+    parser.add_argument('--dry-run', action='store_true', help='Simular operación sin escribir archivos')
+    
+    # Legacy arguments compatibility
+    parser.add_argument('-i', '--input', help=argparse.SUPPRESS)
+    parser.add_argument('-o', '--output', help=argparse.SUPPRESS)
+    parser.add_argument('-d', '--directory', help=argparse.SUPPRESS)
     
     args = parser.parse_args()
     
-    # Validar argumentos
-    if not args.input and not args.directory:
-        parser.error("Debe especificar --input o --directory")
+    # Handle legacy arguments
+    if not args.source:
+        if args.input:
+            args.source = args.input
+        elif args.directory:
+            args.source = args.directory
     
-    if args.input and args.directory:
-        parser.error("No puede especificar --input y --directory simultáneamente")
+    if not args.destination and args.output:
+        args.destination = args.output
+        
+    if not args.source:
+        parser.error("Debe especificar source (o usar -i/-d)")
     
     if args.to_gift and args.to_xml:
         parser.error("No puede especificar --to-gift y --to-xml simultáneamente")
     
     try:
-        if args.directory:
+        source_path = Path(args.source)
+        
+        if source_path.is_dir():
             # Conversión masiva
-            if not args.output:
-                parser.error("Debe especificar --output para conversión masiva")
+            if not args.destination:
+                parser.error("Debe especificar destination para conversión masiva")
             
             # Determinar dirección de conversión
             if args.to_xml:
@@ -574,9 +609,8 @@ Ejemplos de uso:
                 to_gift = True
             else:
                 # Auto-detectar por contenido del directorio
-                input_dir = Path(args.directory)
-                xml_count = len(list(input_dir.rglob('*.xml')))
-                gift_count = len(list(input_dir.rglob('*.gift')))
+                xml_count = len(list(source_path.rglob('*.xml')))
+                gift_count = len(list(source_path.rglob('*.gift')))
                 
                 if xml_count > gift_count:
                     to_gift = True
@@ -585,11 +619,10 @@ Ejemplos de uso:
                 else:
                     parser.error("No se pudo determinar la dirección de conversión. Use --to-gift o --to-xml")
             
-            convert_directory(args.directory, args.output, to_gift)
+            convert_directory(args.source, args.destination, to_gift, args.dry_run)
         
-        else:
+        elif source_path.is_file():
             # Conversión de archivo individual
-            input_path = Path(args.input)
             
             # Determinar dirección de conversión
             if args.to_xml:
@@ -598,9 +631,13 @@ Ejemplos de uso:
                 to_gift = True
             else:
                 # Auto-detectar por extensión
-                to_gift = input_path.suffix.lower() == '.xml'
+                to_gift = source_path.suffix.lower() == '.xml'
             
-            convert_file(args.input, args.output, to_gift)
+            convert_file(args.source, args.destination, to_gift, args.dry_run)
+        
+        else:
+            print(f"Error: Source no encontrado: {args.source}")
+            return 1
     
     except Exception as e:
         print(f"Error: {e}")
