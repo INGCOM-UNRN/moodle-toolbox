@@ -1,0 +1,15 @@
+::Simple MC::
+What is 2+2?{=4 ~3 ~5}
+
+::Multiline::
+This is a
+multiline question.{
+    =Correct
+    ~Incorrect
+}
+
+::TrueFalse::
+Is the sky blue?{T}
+
+::Short Answer::
+Capital of France?{=Paris}
