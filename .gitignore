@@ -143,6 +143,9 @@ converted_output/
 *_analysis.txt
 similares.txt
 duplicados.txt
+log.json
+problemas.json
+P2.txt
 
 # ============================================================================
 # Sistema Operativo
