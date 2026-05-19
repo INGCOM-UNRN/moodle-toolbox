@@ -65,22 +65,33 @@ def clean_tags(paths, recursive):
 
 @xml.command()
 @click.argument('paths', nargs=-1, type=click.Path(exists=True))
-def rename(paths):
+@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
+def rename(paths, recursive):
     """Renombra archivos XML según el nombre de la pregunta."""
+    if not paths:
+        paths = ['.']
+        
+    files = []
     for p in paths:
         path = Path(p)
         if path.is_file() and path.suffix == '.xml':
-            try:
-                tree = ET.parse(path)
-                root = tree.getroot()
-                question = root.find('.//question')
-                if question is not None:
-                    name_elem = question.find('.//name/text')
-                    if name_elem is not None and name_elem.text:
-                        new_name = sanitize_filename(name_elem.text) + ".xml"
-                        new_path = path.parent / new_name
-                        if path != new_path:
-                            path.rename(new_path)
-                            click.echo(f"✓ {path} -> {new_path}")
-            except Exception as e:
-                click.echo(f"Error en {path}: {e}", err=True)
+            files.append(path)
+        elif path.is_dir():
+            pattern = "**/*.xml" if recursive else "*.xml"
+            files.extend(list(path.glob(pattern)))
+
+    for f in sorted(files):
+        try:
+            tree = ET.parse(f)
+            root = tree.getroot()
+            question = root.find('.//question')
+            if question is not None:
+                name_elem = question.find('.//name/text')
+                if name_elem is not None and name_elem.text:
+                    new_name = sanitize_filename(name_elem.text) + ".xml"
+                    new_path = f.parent / new_name
+                    if f != new_path:
+                        f.rename(new_path)
+                        click.echo(f"✓ {f} -> {new_path}")
+        except Exception as e:
+            click.echo(f"Error en {f}: {e}", err=True)

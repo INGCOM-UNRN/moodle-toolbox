@@ -305,6 +305,7 @@ class GiftAnalyzer:
     
     def find_duplicates(self):
         """Find duplicate or very similar questions."""
+        self.duplicates = []
         if len(self.all_questions) < 2:
             return
         

@@ -83,33 +83,35 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    parser.add_argument('input', help='Archivo .gift o directorio a procesar')
+    parser.add_argument('inputs', nargs='+', help='Archivos .gift o directorios a procesar')
     parser.add_argument('--mode', choices=['improve', 'multiply'], required=True,
                         help='Modo de procesamiento: improve (mejorar) o multiply (crear variaciones)')
     parser.add_argument('--prompt', help='Prompt personalizado para el modo improve')
     parser.add_argument('--output', help='Directorio de salida (por defecto: output_<mode>)')
     parser.add_argument('--model', default='gemini-2.0-flash', help='Modelo de Gemini a usar (por defecto: gemini-2.0-flash)')
+    parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
 
     args = parser.parse_args()
     
     client = load_config()
     
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"❌ Error: La ruta {args.input} no existe.")
-        sys.exit(1)
-        
     output_dir = Path(args.output) if args.output else Path(f"output_{args.mode}")
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    if input_path.is_file():
-        process_file(client, args.model, input_path, output_dir, args.mode, args.prompt)
-    elif input_path.is_dir():
-        for gift_file in input_path.glob("*.gift"):
-            process_file(client, args.model, gift_file, output_dir, args.mode, args.prompt)
-    else:
-        print(f"❌ Error: {args.input} no es un archivo ni un directorio válido.")
-        sys.exit(1)
+    for input_str in args.inputs:
+        input_path = Path(input_str)
+        if not input_path.exists():
+            print(f"❌ Error: La ruta {input_str} no existe.")
+            continue
+            
+        if input_path.is_file():
+            process_file(client, args.model, input_path, output_dir, args.mode, args.prompt)
+        elif input_path.is_dir():
+            pattern = "**/*.gift" if args.recursive else "*.gift"
+            for gift_file in input_path.glob(pattern):
+                process_file(client, args.model, gift_file, output_dir, args.mode, args.prompt)
+        else:
+            print(f"❌ Error: {input_str} no es un archivo ni un directorio válido.")
 
 if __name__ == '__main__':
     main()

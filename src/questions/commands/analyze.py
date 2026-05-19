@@ -11,28 +11,45 @@ def analyze():
     pass
 
 @analyze.command(name="stats")
-@click.argument('path', type=click.Path(exists=True))
-@click.option('-r', '--no-recursive', is_flag=True, help='No buscar recursivamente')
+@click.argument('paths', nargs=-1, type=click.Path(exists=True))
+@click.option('-r', '--recursive', is_flag=True, help='Buscar recursivamente')
 @click.option('-o', '--output', help='Archivo de salida para el informe')
-def stats(path, no_recursive, output):
+def stats(paths, recursive, output):
     """Genera estadísticas de un directorio de preguntas."""
-    path_obj = Path(path)
-    if path_obj.is_dir():
-        analyzer = GiftAnalyzer(recursive=not no_recursive)
-        analyzer.scan_directory(str(path_obj))
-        report = analyzer.generate_report(output)
-        if not output:
-            click.echo(report)
-    else:
-        click.echo("Por favor, especifica un directorio.", err=True)
+    if not paths:
+        paths = ['.']
+        
+    analyzer = GiftAnalyzer(recursive=recursive)
+    for p in paths:
+        path_obj = Path(p)
+        if path_obj.is_dir():
+            analyzer.scan_directory(str(path_obj))
+        else:
+            analyzer.analyze_file(path_obj)
+            
+    analyzer.find_duplicates()
+    report = analyzer.generate_report(output)
+    if not output:
+        click.echo(report)
 
 @analyze.command(name="similar")
-@click.argument('path', type=click.Path(exists=True))
+@click.argument('paths', nargs=-1, type=click.Path(exists=True))
+@click.option('-r', '--recursive', is_flag=True, help='Buscar recursivamente')
 @click.option('-s', '--similarity', type=float, default=0.85, help='Threshold de similitud')
-def similar(path, similarity):
+def similar(paths, recursive, similarity):
     """Encuentra preguntas similares en un directorio."""
-    analyzer = GiftAnalyzer(similarity_threshold=similarity)
-    analyzer.scan_directory(str(path))
+    if not paths:
+        paths = ['.']
+        
+    analyzer = GiftAnalyzer(similarity_threshold=similarity, recursive=recursive)
+    for p in paths:
+        path_obj = Path(p)
+        if path_obj.is_dir():
+            analyzer.scan_directory(str(path_obj))
+        else:
+            analyzer.analyze_file(path_obj)
+            
+    analyzer.find_duplicates()
     
     if analyzer.duplicates:
         click.echo(f"Se encontraron {len(analyzer.duplicates)} pares de preguntas similares:")
