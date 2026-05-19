@@ -1,4 +1,4 @@
-VALIDATE_INSTRUCTIONS = """
+VALIDATE_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Validación de Preguntas
 Al generar o corregir preguntas GIFT:
 1. **Evita líneas en blanco internas**: No insertes líneas vacías entre el título, el enunciado y el bloque de respuestas. En GIFT, una línea en blanco termina la pregunta.
@@ -7,7 +7,7 @@ Al generar o corregir preguntas GIFT:
 4. **Resuelve duplicados**: Si el validador indica alta similitud, asegúrate de que la nueva pregunta aporte un valor distinto.
 """
 
-FORMAT_INSTRUCTIONS = """
+FORMAT_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Formato GIFT
 Genera archivos GIFT siguiendo este estándar visual estricto:
 1. **Título**: Primera línea, formato `::Título::`.
@@ -17,7 +17,7 @@ Genera archivos GIFT siguiendo este estándar visual estricto:
 5. **Sin espacios extra**: Evita líneas en blanco innecesarias dentro de la estructura.
 """
 
-XML_INSTRUCTIONS = """
+XML_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Mantenimiento XML
 Al manipular archivos XML de Moodle:
 1. **Secciones CDATA**: Envuelve SIEMPRE el contenido de los nodos `<text>` en `<![CDATA[ ... ]]>`.
@@ -25,33 +25,33 @@ Al manipular archivos XML de Moodle:
 3. **Nombres de archivo**: Usa el subcomando `rename` para normalizar nombres basados en el título interno.
 """
 
-CONVERT_INSTRUCTIONS = """
+CONVERT_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Conversión de Formatos
 1. **HTML a Markdown**: Prefiere siempre el formato Markdown. Usa backticks (`) para código y negritas (**) para énfasis.
 2. **Atributos de Formato**: Al convertir tags HTML, asegúrate de actualizar el atributo `format="html"` a `format="markdown"` en el XML resultante.
 """
 
-AI_INSTRUCTIONS = """
+AI_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Procesamiento con IA
 1. **Modo Improve**: Mejora la gramática y precisión pedagógica sin alterar la estructura GIFT fundamental.
 2. **Modo Multiply**: Crea variaciones que evalúen el mismo objetivo de aprendizaje pero con diferentes contextos o distractores.
 3. **Salida Pura**: Devuelve únicamente el código GIFT, sin preámbulos ni explicaciones adicionales.
 """
 
-FIX_INSTRUCTIONS = """
+FIX_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Correcciones de Código
 1. **Indentación en Código**: En bloques de código (```), usa `····` (4 puntos medios) en lugar de espacios si el archivo se usará en contextos donde el espacio es un delimitador crítico.
 2. **Caracteres Especiales**: Convierte caracteres como `{` `}` `=` `#` a sus versiones fullwidth dentro de bloques de código para evitar que el parser de Moodle los interprete como parte de la lógica GIFT.
 """
 
-GENERAL_INSTRUCTIONS = """
+GENERAL_INSTRUCTIONS = r"""
 # Instrucciones Generales para LLM (Questions CLI)
 - Prioriza siempre el formato GIFT por su legibilidad sobre el XML.
 - Usa el CLI para validar cada cambio antes de dar por finalizada una tarea.
 - Mantén la consistencia en el etiquetado (`// [tag:nombre]`) e identificadores (`// [id:id]`).
 """
 
-SPLIT_INSTRUCTIONS = """
+SPLIT_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Dividir Archivos GIFT
 1. **Un solo archivo por pregunta**: El repositorio sigue la política de una pregunta por archivo. Usa `split` para desglosar bancos masivos.
 2. **Nombres automáticos**: El comando usará el título `::Título::` para nombrar el nuevo archivo. Asegúrate de que los títulos sean descriptivos y únicos.
