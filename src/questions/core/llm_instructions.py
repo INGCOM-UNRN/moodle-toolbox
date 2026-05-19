@@ -51,6 +51,13 @@ GENERAL_INSTRUCTIONS = """
 - Mantén la consistencia en el etiquetado (`// [tag:nombre]`) e identificadores (`// [id:id]`).
 """
 
+SPLIT_INSTRUCTIONS = """
+# Instrucciones para LLM: Dividir Archivos GIFT
+1. **Un solo archivo por pregunta**: El repositorio sigue la política de una pregunta por archivo. Usa `split` para desglosar bancos masivos.
+2. **Nombres automáticos**: El comando usará el título `::Título::` para nombrar el nuevo archivo. Asegúrate de que los títulos sean descriptivos y únicos.
+3. **Consistencia**: Al dividir, se mantiene el contenido exacto de cada bloque. Verifica que cada bloque resultante sea una pregunta GIFT válida e independiente.
+"""
+
 def get_instructions(command_name):
     mapping = {
         'validate': VALIDATE_INSTRUCTIONS,
@@ -59,6 +66,7 @@ def get_instructions(command_name):
         'xml': XML_INSTRUCTIONS,
         'convert': CONVERT_INSTRUCTIONS,
         'ai': AI_INSTRUCTIONS,
-        'fix': FIX_INSTRUCTIONS
+        'fix': FIX_INSTRUCTIONS,
+        'split': SPLIT_INSTRUCTIONS
     }
     return mapping.get(command_name, GENERAL_INSTRUCTIONS)
