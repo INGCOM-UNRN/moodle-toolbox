@@ -2,7 +2,10 @@ import click
 from pathlib import Path
 from questions.core.formatter import fix_code_indentation, convert_markdown_code_blocks, process_xml_cdata
 
+from questions.commands.common import llm_option
+
 @click.group()
+@llm_option
 def fix():
     """Comandos para corregir problemas comunes."""
     pass

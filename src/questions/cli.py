@@ -29,7 +29,18 @@ class LazyGroup(click.Group):
             return fix
         return super().get_command(ctx, cmd_name)
 
+from questions.core.llm_instructions import get_instructions
+
+def llm_callback(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(get_instructions(ctx.command.name))
+    ctx.exit()
+
 @click.group(cls=LazyGroup)
+@click.option('--llm', is_flag=True, callback=llm_callback, 
+              expose_value=False, is_eager=True,
+              help='Muestra instrucciones generales para un LLM.')
 def cli():
     """Herramientas para la gestión de preguntas de Moodle."""
     pass

@@ -3,7 +3,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from questions.core.xml_tools import ensure_cdata_in_text_blocks, sanitize_filename, remove_tags_from_xml
 
+from questions.commands.common import llm_option
+
 @click.group()
+@llm_option
 def xml():
     """Herramientas para archivos XML de Moodle."""
     pass

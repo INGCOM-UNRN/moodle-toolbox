@@ -2,7 +2,10 @@ import click
 from pathlib import Path
 from questions.core.validator import GiftAnalyzer
 
+from questions.commands.common import llm_option
+
 @click.group()
+@llm_option
 def analyze():
     """Análisis y estadísticas de preguntas."""
     pass

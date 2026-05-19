@@ -3,7 +3,10 @@ from pathlib import Path
 from questions.core.validator import GiftAnalyzer
 from questions.core.parser import parse_gift_file
 
+from questions.commands.common import llm_option
+
 @click.command()
+@llm_option
 @click.argument('path', type=click.Path(exists=True))
 @click.option('-o', '--output', help='Archivo de salida para el informe')
 @click.option('-r', '--no-recursive', is_flag=True, help='No buscar recursivamente')

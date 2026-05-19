@@ -2,7 +2,10 @@ import click
 from pathlib import Path
 from questions.core.formatter import format_gift_content, fix_code_indentation, convert_markdown_code_blocks, process_xml_cdata
 
+from questions.commands.common import llm_option
+
 @click.command()
+@llm_option
 @click.argument('paths', nargs=-1, type=click.Path(exists=True))
 @click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
 @click.option('-n', '--dry-run', is_flag=True, help='No aplicar cambios')

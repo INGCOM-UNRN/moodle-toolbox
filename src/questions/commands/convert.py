@@ -2,7 +2,10 @@ import click
 from pathlib import Path
 from questions.core.converter import convert_html_tags_to_markdown
 
+from questions.commands.common import llm_option
+
 @click.group()
+@llm_option
 def convert():
     """Comandos para convertir entre formatos."""
     pass
