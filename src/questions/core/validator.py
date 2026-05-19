@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from gift_tools.gift_parser import parse_gift_file, get_question_summary
+from questions.core.parser import parse_gift_file, get_question_summary
 
 
 @dataclass
