@@ -30,6 +30,9 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions format`: Estandariza el formato visual de archivos GIFT y ajusta bloques de código.
 - `questions fix code-indent`: Corrige la indentación dentro de bloques de código (```).
 - `questions fix code-chars`: Convierte caracteres especiales entre normal y fullwidth.
+- `questions fix slugify`: Normaliza nombres de archivos (minúsculas, sin acentos).
+- `questions fix name-from-title`: Renombra archivos según el título de la pregunta.
+- `questions fix title-from-name`: Actualiza el título interno según el nombre del archivo.
 
 ### 3. Conversión
 - `questions convert html-to-md`: Convierte etiquetas HTML a Markdown en archivos XML o GIFT.

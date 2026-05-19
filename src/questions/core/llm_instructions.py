@@ -39,9 +39,13 @@ AI_INSTRUCTIONS = r"""
 """
 
 FIX_INSTRUCTIONS = r"""
-# Instrucciones para LLM: Correcciones de Código
-1. **Indentación en Código**: En bloques de código (```), usa `····` (4 puntos medios) en lugar de espacios si el archivo se usará en contextos donde el espacio es un delimitador crítico.
-2. **Caracteres Especiales**: Convierte caracteres como `{` `}` `=` `#` a sus versiones fullwidth dentro de bloques de código para evitar que el parser de Moodle los interprete como parte de la lógica GIFT.
+# Instrucciones para LLM: Correcciones y Renombrado
+1. **Indentación en Código**: En bloques de código (```), usa `····` (4 puntos medios) en lugar de espacios.
+2. **Slugificación**: Usa `fix slugify` para normalizar nombres de archivos a minúsculas y sin acentos.
+3. **Sincronización de Nombres**:
+   - `fix name-from-title`: Sincroniza el nombre del archivo con el título interno `::Título::`.
+   - `fix title-from-name`: Actualiza el título interno `::Título::` basándose en el nombre del archivo.
+4. **Caracteres Especiales**: Convierte caracteres críticos a fullwidth dentro de bloques de código.
 """
 
 GENERAL_INSTRUCTIONS = r"""
