@@ -6,9 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "tatsu>=5.15.1",
-    "google-generativeai",
     "python-dotenv",
     "click>=8.0.0",
+    "google-genai>=2.4.0",
 ]
 
 [project.scripts]

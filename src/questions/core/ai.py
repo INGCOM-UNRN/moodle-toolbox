@@ -6,17 +6,17 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 
 def load_config():
-    """Load configuration from .env file."""
+    """Load configuration from .env file and return GenAI Client."""
     load_dotenv()
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         print("❌ Error: GEMINI_API_KEY no encontrada en el archivo .env")
         print("Asegúrate de crear un archivo .env basado en .env.example")
         sys.exit(1)
-    genai.configure(api_key=api_key)
+    return genai.Client(api_key=api_key)
 
 def split_gift_questions(content: str) -> List[str]:
     """Split GIFT content into individual questions based on blank lines."""
@@ -25,7 +25,7 @@ def split_gift_questions(content: str) -> List[str]:
     # Filter out empty parts
     return [p.strip() for p in parts if p.strip()]
 
-def process_question(model, question: str, mode: str, custom_prompt: Optional[str] = None) -> str:
+def process_question(client: genai.Client, model_id: str, question: str, mode: str, custom_prompt: Optional[str] = None) -> str:
     """Process a single question with Gemini."""
     if mode == "improve":
         system_instruction = (
@@ -49,15 +49,16 @@ def process_question(model, question: str, mode: str, custom_prompt: Optional[st
     prompt = f"Pregunta original:\n\n{question}\n\nPor favor, genera el resultado en formato GIFT:"
     
     try:
-        response = model.generate_content(
-            f"{system_instruction}\n\n{prompt}"
+        response = client.models.generate_content(
+            model=model_id,
+            contents=f"{system_instruction}\n\n{prompt}"
         )
         return response.text.strip()
     except Exception as e:
         print(f"❌ Error procesando pregunta con Gemini: {e}")
         return question # Return original on error
 
-def process_file(model, input_path: Path, output_dir: Path, mode: str, custom_prompt: Optional[str] = None):
+def process_file(client: genai.Client, model_id: str, input_path: Path, output_dir: Path, mode: str, custom_prompt: Optional[str] = None):
     """Process a single GIFT file."""
     print(f"📄 Procesando: {input_path}")
     content = input_path.read_text(encoding='utf-8')
@@ -66,7 +67,7 @@ def process_file(model, input_path: Path, output_dir: Path, mode: str, custom_pr
     processed_questions = []
     for i, q in enumerate(questions):
         print(f"  - Pregunta {i+1}/{len(questions)}...")
-        processed = process_question(model, q, mode, custom_prompt)
+        processed = process_question(client, model_id, q, mode, custom_prompt)
         processed_questions.append(processed)
     
     output_filename = input_path.stem + f"_{mode}" + input_path.suffix
@@ -91,8 +92,7 @@ def main():
 
     args = parser.parse_args()
     
-    load_config()
-    model = genai.GenerativeModel(args.model)
+    client = load_config()
     
     input_path = Path(args.input)
     if not input_path.exists():
@@ -103,10 +103,10 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     if input_path.is_file():
-        process_file(model, input_path, output_dir, args.mode, args.prompt)
+        process_file(client, args.model, input_path, output_dir, args.mode, args.prompt)
     elif input_path.is_dir():
         for gift_file in input_path.glob("*.gift"):
-            process_file(model, gift_file, output_dir, args.mode, args.prompt)
+            process_file(client, args.model, gift_file, output_dir, args.mode, args.prompt)
     else:
         print(f"❌ Error: {args.input} no es un archivo ni un directorio válido.")
         sys.exit(1)
