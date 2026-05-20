@@ -62,7 +62,7 @@ def process_batch(client: genai.Client, model_id: str, questions: List[str], mod
             "Eres un experto en formato GIFT de Moodle. "
             "Tu tarea es transformar las siguientes preguntas siguiendo estas instrucciones:\n"
             f"{custom_prompt or 'Mejora las preguntas manteniendo el formato GIFT.'}\n"
-            "Mantén estrictamente el formato GIFT en la salida. No añadas explicaciones."
+            "Mantén estrictamente el formato GIFT en la salida. No añadas explicaciones fuera del bloque de la pregunta."
         )
 
     # Join questions with separators to process in one go
@@ -81,7 +81,7 @@ def process_batch(client: genai.Client, model_id: str, questions: List[str], mod
         print(f"❌ Error procesando lote con Gemini: {e}")
         return questions # Return original batch on error
 
-def process_file_batched(client: genai.Client, model_id: str, input_path: Path, output_dir: Path, mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5):
+def process_file_batched(client: genai.Client, model_id: str, input_path: Path, output_dir: Optional[Path], mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False):
     """Process a single GIFT file using batching."""
     print(f"📄 Procesando: {input_path}")
     content = input_path.read_text(encoding='utf-8')
@@ -98,12 +98,16 @@ def process_file_batched(client: genai.Client, model_id: str, input_path: Path, 
         processed_batch = process_batch(client, model_id, batch, mode, custom_prompt)
         processed_questions.extend(processed_batch)
     
-    output_filename = input_path.stem + f"_{mode}" + input_path.suffix
-    output_path = output_dir / output_filename
-    
     output_content = "\n\n".join(processed_questions)
-    output_path.write_text(output_content, encoding='utf-8')
-    print(f"✅ Guardado en: {output_path}")
+    
+    if in_place:
+        input_path.write_text(output_content, encoding='utf-8')
+        print(f"✅ Actualizado in-place: {input_path}")
+    else:
+        output_filename = input_path.stem + f"_{mode}" + input_path.suffix
+        output_path = output_dir / output_filename
+        output_path.write_text(output_content, encoding='utf-8')
+        print(f"✅ Guardado en: {output_path}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -119,6 +123,7 @@ def main():
     parser.add_argument('--model', default='gemini-2.0-flash', help='Modelo de Gemini (default: gemini-2.0-flash)')
     parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
     parser.add_argument('--batch-size', type=int, default=5, help='Número de preguntas por petición (default: 5)')
+    parser.add_argument('-i', '--in-place', action='store_true', help='Sobrescribir los archivos originales')
 
     args = parser.parse_args()
     
@@ -138,8 +143,10 @@ def main():
         print(e)
         sys.exit(1)
     
-    output_dir = Path(args.output) if args.output else Path(f"output_{mode}")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = None
+    if not args.in_place:
+        output_dir = Path(args.output) if args.output else Path(f"output_{mode}")
+        output_dir.mkdir(parents=True, exist_ok=True)
     
     for input_str in args.inputs:
         input_path = Path(input_str)
@@ -148,11 +155,11 @@ def main():
             continue
             
         if input_path.is_file():
-            process_file_batched(client, args.model, input_path, output_dir, mode, custom_prompt, args.batch_size)
+            process_file_batched(client, args.model, input_path, output_dir, mode, custom_prompt, args.batch_size, args.in_place)
         elif input_path.is_dir():
             pattern = "**/*.gift" if args.recursive else "*.gift"
             for gift_file in sorted(input_path.glob(pattern)):
-                process_file_batched(client, args.model, gift_file, output_dir, mode, custom_prompt, args.batch_size)
+                process_file_batched(client, args.model, gift_file, output_dir, mode, custom_prompt, args.batch_size, args.in_place)
         else:
             print(f"❌ Error: {input_str} no es un archivo ni un directorio válido.")
 

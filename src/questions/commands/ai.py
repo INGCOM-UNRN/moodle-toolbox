@@ -13,7 +13,8 @@ from questions.commands.common import llm_option
 @click.option('--model', help='Modelo de Gemini (default: configurado o gemini-2.0-flash).')
 @click.option('-r', '--recursive', is_flag=True, help='Procesar subdirectorios recursivamente.')
 @click.option('--batch-size', type=int, default=5, help='Número de preguntas por petición a la API (default: 5).')
-def ai(inputs, mode, prompt, output, model, recursive, batch_size):
+@click.option('-i', '--in-place', is_flag=True, help='Sobrescribir los archivos originales.')
+def ai(inputs, mode, prompt, output, model, recursive, batch_size, in_place):
     """Procesamiento de preguntas usando IA (Gemini)."""
     if not inputs:
         click.echo("Error: Debes proporcionar al menos una ruta de entrada.", err=True)
@@ -41,18 +42,20 @@ def ai(inputs, mode, prompt, output, model, recursive, batch_size):
         click.echo(str(e), err=True)
         return
     
-    output_dir = Path(output) if output else Path(f"output_{mode}")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = None
+    if not in_place:
+        output_dir = Path(output) if output else Path(f"output_{mode}")
+        output_dir.mkdir(parents=True, exist_ok=True)
     
     for input_str in inputs:
         input_path = Path(input_str)
         if input_path.is_file():
-            process_file_batched(client, active_model, input_path, output_dir, mode, custom_prompt, batch_size)
+            process_file_batched(client, active_model, input_path, output_dir, mode, custom_prompt, batch_size, in_place)
         elif input_path.is_dir():
             pattern = "**/*.gift" if recursive else "*.gift"
-            files = list(input_path.glob(pattern))
+            files = sorted(list(input_path.glob(pattern)))
             if not files:
                 click.echo(f"No se encontraron archivos .gift en {input_str}")
                 continue
             for gift_file in files:
-                process_file_batched(client, active_model, gift_file, output_dir, mode, custom_prompt, batch_size)
+                process_file_batched(client, active_model, gift_file, output_dir, mode, custom_prompt, batch_size, in_place)
