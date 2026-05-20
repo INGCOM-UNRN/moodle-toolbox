@@ -17,6 +17,13 @@ def load_config():
         raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")
     return genai.Client(api_key=api_key)
 
+def split_gift_questions(content: str) -> List[str]:
+    """Split GIFT content into individual questions based on blank lines."""
+    # Split by one or more blank lines
+    parts = re.split(r'\n\s*\n', content)
+    # Filter out empty parts
+    return [p.strip() for p in parts if p.strip()]
+
 def list_available_models(client: genai.Client) -> List[str]:
     """Lista los modelos generativos disponibles en Gemini."""
     try:
@@ -67,12 +74,8 @@ def process_batch(client: genai.Client, model_id: str, questions: List[str], mod
             model=model_id,
             contents=f"{system_instruction}\n\n{prompt}"
         )
-        # Split the response back into individual blocks if needed, 
-        # but since we want GIFT output, splitting by double newline is usually enough
+        # Split the response back into individual blocks if needed
         processed_batch = split_gift_questions(response.text.strip())
-        
-        # If the model didn't return enough questions (common in multiply), 
-        # we might have issues, but for improve/transform it should be 1:1 or similar.
         return processed_batch
     except Exception as e:
         print(f"❌ Error procesando lote con Gemini: {e}")
@@ -84,6 +87,10 @@ def process_file_batched(client: genai.Client, model_id: str, input_path: Path, 
     content = input_path.read_text(encoding='utf-8')
     questions = split_gift_questions(content)
     
+    if not questions:
+        print(f"  ⚠️ No se encontraron preguntas en {input_path}")
+        return
+
     processed_questions = []
     for i in range(0, len(questions), batch_size):
         batch = questions[i:i+batch_size]
@@ -111,6 +118,7 @@ def main():
     parser.add_argument('--output', help='Directorio de salida (por defecto: output_<mode>)')
     parser.add_argument('--model', default='gemini-2.0-flash', help='Modelo de Gemini (default: gemini-2.0-flash)')
     parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
+    parser.add_argument('--batch-size', type=int, default=5, help='Número de preguntas por petición (default: 5)')
 
     args = parser.parse_args()
     
@@ -124,7 +132,11 @@ def main():
     if args.prompt and args.mode == 'improve':
         mode = 'transform'
 
-    client = load_config()
+    try:
+        client = load_config()
+    except ValueError as e:
+        print(e)
+        sys.exit(1)
     
     output_dir = Path(args.output) if args.output else Path(f"output_{mode}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -136,11 +148,11 @@ def main():
             continue
             
         if input_path.is_file():
-            process_file(client, args.model, input_path, output_dir, mode, custom_prompt)
+            process_file_batched(client, args.model, input_path, output_dir, mode, custom_prompt, args.batch_size)
         elif input_path.is_dir():
             pattern = "**/*.gift" if args.recursive else "*.gift"
-            for gift_file in input_path.glob(pattern):
-                process_file(client, args.model, gift_file, output_dir, mode, custom_prompt)
+            for gift_file in sorted(input_path.glob(pattern)):
+                process_file_batched(client, args.model, gift_file, output_dir, mode, custom_prompt, args.batch_size)
         else:
             print(f"❌ Error: {input_str} no es un archivo ni un directorio válido.")
 
