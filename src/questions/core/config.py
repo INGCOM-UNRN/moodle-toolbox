@@ -18,6 +18,17 @@ def get_api_key() -> str:
         
     return api_key
 
+def get_model() -> str:
+    """Obtiene el modelo por defecto desde el entorno o la configuración global."""
+    load_dotenv()
+    model = os.getenv("GEMINI_MODEL")
+    
+    if not model and ENV_FILE.exists():
+        load_dotenv(ENV_FILE)
+        model = os.getenv("GEMINI_MODEL")
+        
+    return model or "gemini-2.0-flash"
+
 def save_api_key(api_key: str):
     """Guarda la API Key en el archivo de configuración global."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -26,6 +37,14 @@ def save_api_key(api_key: str):
     
     # Usar python-dotenv para guardar de forma persistente
     set_key(str(ENV_FILE), "GEMINI_API_KEY", api_key)
+
+def save_model(model: str):
+    """Guarda el modelo por defecto en el archivo de configuración global."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not ENV_FILE.exists():
+        ENV_FILE.touch(mode=0o600)
+    
+    set_key(str(ENV_FILE), "GEMINI_MODEL", model)
 
 def delete_api_key():
     """Elimina la API Key configurada."""

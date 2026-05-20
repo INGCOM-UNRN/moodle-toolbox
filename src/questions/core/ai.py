@@ -8,7 +8,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from google import genai
 
-from questions.core.config import get_api_key
+from questions.core.config import get_api_key, get_model
 
 def load_config():
     """Load configuration and return GenAI Client."""
@@ -16,6 +16,18 @@ def load_config():
     if not api_key:
         raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")
     return genai.Client(api_key=api_key)
+
+def list_available_models(client: genai.Client) -> List[str]:
+    """Lista los modelos generativos disponibles en Gemini."""
+    try:
+        models = []
+        for model in client.models.list():
+            if 'generateContent' in model.supported_methods:
+                models.append(model.name)
+        return models
+    except Exception as e:
+        print(f"❌ Error al listar modelos: {e}")
+        return []
 
 def process_batch(client: genai.Client, model_id: str, questions: List[str], mode: str, custom_prompt: Optional[str] = None) -> List[str]:
     """Process a batch of questions with Gemini."""

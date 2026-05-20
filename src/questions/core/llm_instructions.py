@@ -53,6 +53,7 @@ GENERAL_INSTRUCTIONS = r"""
 - Prioriza siempre el formato GIFT por su legibilidad sobre el XML.
 - Usa el CLI para validar cada cambio antes de dar por finalizada una tarea.
 - Mantén la consistencia en el etiquetado (`// [tag:nombre]`) e identificadores (`// [id:id]`).
+- `-r` es el flag para procesamiento recursivo en directorios, asegúrate de usarlo cuando trabajes con múltiples archivos.
 """
 
 SPLIT_INSTRUCTIONS = r"""
