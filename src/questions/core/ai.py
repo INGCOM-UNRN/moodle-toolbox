@@ -8,74 +8,76 @@ from typing import List, Optional
 from dotenv import load_dotenv
 from google import genai
 
+from questions.core.config import get_api_key
+
 def load_config():
-    """Load configuration from .env file and return GenAI Client."""
-    load_dotenv()
-    api_key = os.getenv("GEMINI_API_KEY")
+    """Load configuration and return GenAI Client."""
+    api_key = get_api_key()
     if not api_key:
-        print("❌ Error: GEMINI_API_KEY no encontrada en el archivo .env")
-        print("Asegúrate de crear un archivo .env basado en .env.example")
-        sys.exit(1)
+        raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")
     return genai.Client(api_key=api_key)
 
-def split_gift_questions(content: str) -> List[str]:
-    """Split GIFT content into individual questions based on blank lines."""
-    # Split by one or more blank lines
-    parts = re.split(r'\n\s*\n', content)
-    # Filter out empty parts
-    return [p.strip() for p in parts if p.strip()]
+def process_batch(client: genai.Client, model_id: str, questions: List[str], mode: str, custom_prompt: Optional[str] = None) -> List[str]:
+    """Process a batch of questions with Gemini."""
+    if not questions:
+        return []
 
-def process_question(client: genai.Client, model_id: str, question: str, mode: str, custom_prompt: Optional[str] = None) -> str:
-    """Process a single question with Gemini."""
     if mode == "improve":
         system_instruction = (
             "Eres un experto en pedagogía y formato GIFT de Moodle. "
-            "Tu tarea es mejorar la claridad, gramática y calidad pedagógica de la siguiente pregunta GIFT. "
-            "Mantén estrictamente el formato GIFT. No añadas explicaciones fuera del bloque de la pregunta. "
-            "Asegúrate de que la pregunta sea desafiante pero justa."
+            "Tu tarea es mejorar la claridad, gramática y calidad pedagógica de las siguientes preguntas GIFT. "
+            "Mantén estrictamente el formato GIFT para cada pregunta. Separa las preguntas con una línea en blanco. "
+            "No añadas explicaciones fuera de los bloques de las preguntas."
         )
         if custom_prompt:
             system_instruction += f"\nInstrucción adicional: {custom_prompt}"
     elif mode == "multiply":
         system_instruction = (
             "Eres un experto en pedagogía y formato GIFT de Moodle. "
-            "Tu tarea es crear 3 variaciones similares de la siguiente pregunta GIFT. "
-            "Las variaciones deben evaluar el mismo concepto pero con diferentes redacciones o valores. "
-            "Mantén estrictamente el formato GIFT para cada variación. "
-            "Separa cada pregunta con una línea en blanco. "
+            "Tu tarea es crear 3 variaciones similares para CADA UNA de las siguientes preguntas GIFT. "
+            "Mantén estrictamente el formato GIFT. Separa cada pregunta con una línea en blanco. "
             "No añadas explicaciones fuera de las preguntas."
         )
     else:  # transform
         system_instruction = (
             "Eres un experto en formato GIFT de Moodle. "
-            "Tu tarea es transformar la siguiente pregunta siguiendo estas instrucciones:\n"
-            f"{custom_prompt or 'Mejora la pregunta manteniendo el formato GIFT.'}\n"
-            "Mantén estrictamente el formato GIFT en la salida. No añadas explicaciones fuera del bloque de la pregunta."
+            "Tu tarea es transformar las siguientes preguntas siguiendo estas instrucciones:\n"
+            f"{custom_prompt or 'Mejora las preguntas manteniendo el formato GIFT.'}\n"
+            "Mantén estrictamente el formato GIFT en la salida. No añadas explicaciones."
         )
 
-    prompt = f"Pregunta original:\n\n{question}\n\nPor favor, genera el resultado en formato GIFT:"
+    # Join questions with separators to process in one go
+    batch_text = "\n\n---\n\n".join(questions)
+    prompt = f"Procesa este lote de preguntas GIFT:\n\n{batch_text}\n\nPor favor, genera el resultado en formato GIFT:"
     
     try:
         response = client.models.generate_content(
             model=model_id,
             contents=f"{system_instruction}\n\n{prompt}"
         )
-        return response.text.strip()
+        # Split the response back into individual blocks if needed, 
+        # but since we want GIFT output, splitting by double newline is usually enough
+        processed_batch = split_gift_questions(response.text.strip())
+        
+        # If the model didn't return enough questions (common in multiply), 
+        # we might have issues, but for improve/transform it should be 1:1 or similar.
+        return processed_batch
     except Exception as e:
-        print(f"❌ Error procesando pregunta con Gemini: {e}")
-        return question # Return original on error
+        print(f"❌ Error procesando lote con Gemini: {e}")
+        return questions # Return original batch on error
 
-def process_file(client: genai.Client, model_id: str, input_path: Path, output_dir: Path, mode: str, custom_prompt: Optional[str] = None):
-    """Process a single GIFT file."""
+def process_file_batched(client: genai.Client, model_id: str, input_path: Path, output_dir: Path, mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5):
+    """Process a single GIFT file using batching."""
     print(f"📄 Procesando: {input_path}")
     content = input_path.read_text(encoding='utf-8')
     questions = split_gift_questions(content)
     
     processed_questions = []
-    for i, q in enumerate(questions):
-        print(f"  - Pregunta {i+1}/{len(questions)}...")
-        processed = process_question(client, model_id, q, mode, custom_prompt)
-        processed_questions.append(processed)
+    for i in range(0, len(questions), batch_size):
+        batch = questions[i:i+batch_size]
+        print(f"  - Lote {i//batch_size + 1}/{(len(questions)-1)//batch_size + 1} ({len(batch)} preguntas)...")
+        processed_batch = process_batch(client, model_id, batch, mode, custom_prompt)
+        processed_questions.extend(processed_batch)
     
     output_filename = input_path.stem + f"_{mode}" + input_path.suffix
     output_path = output_dir / output_filename

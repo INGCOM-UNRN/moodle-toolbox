@@ -1,6 +1,6 @@
 import click
 from pathlib import Path
-from questions.core.ai import load_config, process_file
+from questions.core.ai import load_config, process_file_batched
 from questions.commands.common import llm_option
 
 @click.command()
@@ -12,7 +12,8 @@ from questions.commands.common import llm_option
 @click.option('--output', type=click.Path(), help='Directorio de salida (por defecto: output_<mode>).')
 @click.option('--model', default='gemini-2.0-flash', help='Modelo de Gemini (default: gemini-2.0-flash).')
 @click.option('-r', '--recursive', is_flag=True, help='Procesar subdirectorios recursivamente.')
-def ai(inputs, mode, prompt, output, model, recursive):
+@click.option('--batch-size', type=int, default=5, help='Número de preguntas por petición a la API (default: 5).')
+def ai(inputs, mode, prompt, output, model, recursive, batch_size):
     """Procesamiento de preguntas usando IA (Gemini)."""
     if not inputs:
         click.echo("Error: Debes proporcionar al menos una ruta de entrada.", err=True)
@@ -43,7 +44,7 @@ def ai(inputs, mode, prompt, output, model, recursive):
     for input_str in inputs:
         input_path = Path(input_str)
         if input_path.is_file():
-            process_file(client, model, input_path, output_dir, mode, custom_prompt)
+            process_file_batched(client, model, input_path, output_dir, mode, custom_prompt, batch_size)
         elif input_path.is_dir():
             pattern = "**/*.gift" if recursive else "*.gift"
             files = list(input_path.glob(pattern))
@@ -51,4 +52,4 @@ def ai(inputs, mode, prompt, output, model, recursive):
                 click.echo(f"No se encontraron archivos .gift en {input_str}")
                 continue
             for gift_file in files:
-                process_file(client, model, gift_file, output_dir, mode, custom_prompt)
+                process_file_batched(client, model, gift_file, output_dir, mode, custom_prompt, batch_size)

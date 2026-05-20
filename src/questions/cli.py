@@ -3,9 +3,12 @@ import sys
 
 class LazyGroup(click.Group):
     def list_commands(self, ctx):
-        return ['ai', 'analyze', 'convert', 'fix', 'format', 'split', 'validate', 'xml']
+        return ['ai', 'analyze', 'config', 'convert', 'fix', 'format', 'split', 'validate', 'xml']
 
     def get_command(self, ctx, cmd_name):
+        if cmd_name == 'config':
+            from questions.commands.config import config
+            return config
         if cmd_name == 'split':
             from questions.commands.split import split
             return split
