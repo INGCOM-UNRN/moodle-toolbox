@@ -1,6 +1,6 @@
 import click
 from pathlib import Path
-from questions.core.ai import load_config, process_file_batched, get_model
+from questions.core.ai import load_config, run_global_ai_processing, get_model
 from questions.commands.common import llm_option
 
 @click.command()
@@ -13,8 +13,9 @@ from questions.commands.common import llm_option
 @click.option('--model', help='Modelo de Gemini (default: configurado o gemini-2.0-flash).')
 @click.option('-r', '--recursive', is_flag=True, help='Procesar subdirectorios recursivamente.')
 @click.option('--batch-size', type=int, default=5, help='Número de preguntas por petición a la API (default: 5).')
-@click.option('-i', '--in-place', is_flag=True, help='Sobrescribir los archivos originales.')
-def ai(inputs, mode, prompt, output, model, recursive, batch_size, in_place):
+@click.option('-i', '--in-place', is_flag=True, help='Escribir en la misma carpeta que el original.')
+@click.option('--suffix', help='Sufijo para los nuevos archivos (usado con --in-place, ej: -ia).')
+def ai(inputs, mode, prompt, output, model, recursive, batch_size, in_place, suffix):
     """Procesamiento de preguntas usando IA (Gemini)."""
     if not inputs:
         click.echo("Error: Debes proporcionar al menos una ruta de entrada.", err=True)
@@ -47,15 +48,33 @@ def ai(inputs, mode, prompt, output, model, recursive, batch_size, in_place):
         output_dir = Path(output) if output else Path(f"output_{mode}")
         output_dir.mkdir(parents=True, exist_ok=True)
     
+    # Collect all file paths
+    file_paths = []
     for input_str in inputs:
         input_path = Path(input_str)
+        if not input_path.exists():
+            click.echo(f"❌ Error: La ruta {input_str} no existe.", err=True)
+            continue
+            
         if input_path.is_file():
-            process_file_batched(client, active_model, input_path, output_dir, mode, custom_prompt, batch_size, in_place)
+            if input_path.suffix == '.gift':
+                file_paths.append(input_path)
         elif input_path.is_dir():
             pattern = "**/*.gift" if recursive else "*.gift"
-            files = sorted(list(input_path.glob(pattern)))
-            if not files:
-                click.echo(f"No se encontraron archivos .gift en {input_str}")
-                continue
-            for gift_file in files:
-                process_file_batched(client, active_model, gift_file, output_dir, mode, custom_prompt, batch_size, in_place)
+            file_paths.extend(sorted(list(input_path.glob(pattern))))
+
+    if not file_paths:
+        click.echo("❌ No se encontraron archivos .gift para procesar.", err=True)
+        return
+
+    run_global_ai_processing(
+        client=client,
+        model_id=active_model,
+        file_paths=file_paths,
+        output_dir=output_dir,
+        mode=mode,
+        custom_prompt=custom_prompt,
+        batch_size=batch_size,
+        in_place=in_place,
+        suffix=suffix
+    )

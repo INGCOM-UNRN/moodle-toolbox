@@ -104,7 +104,7 @@ def process_batch(client: genai.Client, model_id: str, questions: List[str], mod
         print(f"❌ Error procesando lote con Gemini: {e}")
         return questions # Return original batch on error
 
-def run_global_ai_processing(client: genai.Client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False):
+def run_global_ai_processing(client: genai.Client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False, suffix: Optional[str] = None):
     """Procesa todas las preguntas de todos los archivos en lotes globales."""
     
     all_questions_meta = [] # List of { "path": Path, "text": str }
@@ -137,20 +137,10 @@ def run_global_ai_processing(client: genai.Client, model_id: str, file_paths: Li
         
         # Map results back
         if mode == 'multiply':
-            # Multiply is harder to map 1:1 if the AI merges things, 
-            # but usually it returns blocks of 3. 
-            # We'll just append them to the meta objects for now.
-            # (Simplified implementation: in multiply mode, we might not be able to 
-            # perfectly distribute if the batch doesn't return exactly len*3)
-            # For simplicity in this refactor, we'll store processed text in each meta.
-            # If length matches exactly len*3, we can distribute 3 per input.
             if len(processed_texts) == len(batch_texts) * 3:
                 for j, meta in enumerate(batch_meta):
                     meta["processed"] = "\n\n".join(processed_texts[j*3 : (j+1)*3])
             else:
-                # Fallback: distribute what we have or store everything in the last one? 
-                # Better to just store the whole result in the first one and empty others?
-                # No, let's just mark it as processed.
                 batch_meta[0]["processed"] = "\n\n".join(processed_texts)
                 for j in range(1, len(batch_meta)):
                     batch_meta[j]["processed"] = ""
@@ -180,8 +170,13 @@ def run_global_ai_processing(client: genai.Client, model_id: str, file_paths: Li
         output_content = "\n\n".join(questions) + "\n"
         
         if in_place:
-            path.write_text(output_content, encoding='utf-8')
-            print(f"  ✓ {path} (actualizado)")
+            if suffix:
+                output_path = path.parent / f"{path.stem}{suffix}{path.suffix}"
+                output_path.write_text(output_content, encoding='utf-8')
+                print(f"  ✓ {output_path} (creado con sufijo)")
+            else:
+                path.write_text(output_content, encoding='utf-8')
+                print(f"  ✓ {path} (actualizado)")
         else:
             output_filename = path.stem + f"_{mode}" + path.suffix
             output_path = output_dir / output_filename
@@ -205,7 +200,8 @@ def main():
     parser.add_argument('--model', help='Modelo de Gemini (default: configurado o gemini-2.0-flash)')
     parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
     parser.add_argument('--batch-size', type=int, default=5, help='Número de preguntas por petición (default: 5)')
-    parser.add_argument('-i', '--in-place', action='store_true', help='Sobrescribir los archivos originales')
+    parser.add_argument('-i', '--in-place', action='store_true', help='Escribir en la misma carpeta que el original')
+    parser.add_argument('--suffix', help='Sufijo para los nuevos archivos (usado con --in-place, ej: -ia)')
 
     args = parser.parse_args()
     
@@ -258,7 +254,8 @@ def main():
         mode=mode,
         custom_prompt=custom_prompt,
         batch_size=args.batch_size,
-        in_place=args.in_place
+        in_place=args.in_place,
+        suffix=args.suffix
     )
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-def format_gift_content(content: str) -> str:
+def format_gift_content(content: str, correct_first: bool = False) -> str:
     """
     Formatea el contenido de un archivo GIFT según las reglas estandarizadas.
     """
@@ -83,7 +83,7 @@ def format_gift_content(content: str) -> str:
                 
                 if line[0] in ('=', '~', '#', '{') or (line.startswith('####')):
                     if current_ans:
-                        ans_lines.append("    " + current_ans)
+                        ans_lines.append(current_ans)
                     current_ans = line
                 else:
                     if current_ans:
@@ -92,7 +92,20 @@ def format_gift_content(content: str) -> str:
                         current_ans = line
             
             if current_ans:
-                ans_lines.append("    " + current_ans)
+                ans_lines.append(current_ans)
+            
+            # Reordenar si correct_first es True (solo para MC)
+            if correct_first:
+                correct = [a for a in ans_lines if a.startswith('=')]
+                incorrect = [a for a in ans_lines if a.startswith('~')]
+                others = [a for a in ans_lines if not a.startswith('=') and not a.startswith('~')]
+                
+                # Solo reordenar si parece una pregunta MC estándar
+                if correct and incorrect:
+                    ans_lines = correct + incorrect + others
+
+            # Aplicar indentación final
+            ans_lines = ["    " + a for a in ans_lines]
                 
             parts.extend(ans_lines)
             parts.append("}")

@@ -12,7 +12,8 @@ from questions.commands.common import llm_option
 @click.option('--code', is_flag=True, help='Ajustar indentación en bloques de código (```)')
 @click.option('--fullwidth', is_flag=True, help='Convertir caracteres de código a fullwidth')
 @click.option('--normal', is_flag=True, help='Convertir caracteres de código a normal (default)')
-def format_cmd(paths, recursive, dry_run, code, fullwidth, normal):
+@click.option('--correct-first', is_flag=True, help='Mueve la respuesta correcta al principio (solo MC).')
+def format_cmd(paths, recursive, dry_run, code, fullwidth, normal, correct_first):
     """Formatea archivos GIFT y ajusta bloques de código."""
     if not paths:
         paths = ['.']
@@ -45,7 +46,7 @@ def format_cmd(paths, recursive, dry_run, code, fullwidth, normal):
             
             # 1. Formateo GIFT (solo para archivos .gift)
             if f.suffix == '.gift':
-                modified = format_gift_content(modified)
+                modified = format_gift_content(modified, correct_first=correct_first)
             
             # 2. Fix indentación código (opcional)
             if code:
