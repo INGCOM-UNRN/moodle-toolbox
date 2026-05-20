@@ -41,3 +41,19 @@ def test_cli_fix_slugify(tmp_path):
     assert 'test_name.gift' in result.output
     assert not f.exists()
     assert (tmp_path / "test_name.gift").exists()
+
+def test_cli_ai_prompt_file(tmp_path):
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("Make it harder")
+    gift_file = tmp_path / "test.gift"
+    gift_file.write_text("::Q::Text{=A}")
+    
+    # We test the parsing and setup logic, but we stop before the API call 
+    # (since we don't have a valid API key in tests environment usually)
+    runner = CliRunner()
+    # If GEMINI_API_KEY is missing, it will echo an error and return.
+    result = runner.invoke(cli, ['ai', str(gift_file), '--prompt', str(prompt_file)])
+    
+    # It might fail due to missing API key, but we can verify it tried to load the prompt
+    # or just check that it didn't crash on argument parsing.
+    assert result.exit_code == 0 or "GEMINI_API_KEY" in result.output

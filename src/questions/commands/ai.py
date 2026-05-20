@@ -1,15 +1,54 @@
 import click
-from questions.core.ai import main as ai_main
-
+from pathlib import Path
+from questions.core.ai import load_config, process_file
 from questions.commands.common import llm_option
 
 @click.command()
 @llm_option
-@click.argument('args', nargs=-1)
-def ai(args):
+@click.argument('inputs', nargs=-1, type=click.Path(exists=True))
+@click.option('--mode', type=click.Choice(['improve', 'multiply', 'transform']), default='improve',
+              help='Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado).')
+@click.option('--prompt', help='Prompt personalizado o ruta a un archivo .txt con el prompt.')
+@click.option('--output', type=click.Path(), help='Directorio de salida (por defecto: output_<mode>).')
+@click.option('--model', default='gemini-2.0-flash', help='Modelo de Gemini (default: gemini-2.0-flash).')
+@click.option('-r', '--recursive', is_flag=True, help='Procesar subdirectorios recursivamente.')
+def ai(inputs, mode, prompt, output, model, recursive):
     """Procesamiento de preguntas usando IA (Gemini)."""
-    # Para mantener compatibilidad rápida, llamamos al main original
-    # En una refactorización más profunda, moveríamos la lógica aquí
-    import sys
-    sys.argv = ['questions ai'] + list(args)
-    ai_main()
+    if not inputs:
+        click.echo("Error: Debes proporcionar al menos una ruta de entrada.", err=True)
+        return
+
+    # Resolver prompt desde archivo si es necesario
+    custom_prompt = prompt
+    if custom_prompt and Path(custom_prompt).exists() and Path(custom_prompt).is_file():
+        try:
+            custom_prompt = Path(custom_prompt).read_text(encoding='utf-8').strip()
+        except Exception as e:
+            click.echo(f"Error al leer el archivo de prompt: {e}", err=True)
+            return
+    
+    # Si se provee prompt y no hay modo explícito de transform o multiply, usar transform
+    if prompt and mode == 'improve':
+        mode = 'transform'
+
+    try:
+        client = load_config()
+    except Exception as e:
+        click.echo(str(e), err=True)
+        return
+    
+    output_dir = Path(output) if output else Path(f"output_{mode}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    for input_str in inputs:
+        input_path = Path(input_str)
+        if input_path.is_file():
+            process_file(client, model, input_path, output_dir, mode, custom_prompt)
+        elif input_path.is_dir():
+            pattern = "**/*.gift" if recursive else "*.gift"
+            files = list(input_path.glob(pattern))
+            if not files:
+                click.echo(f"No se encontraron archivos .gift en {input_str}")
+                continue
+            for gift_file in files:
+                process_file(client, model, gift_file, output_dir, mode, custom_prompt)
