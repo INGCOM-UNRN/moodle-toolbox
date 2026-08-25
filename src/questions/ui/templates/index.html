@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>mxviz - Moodle XML Visualizer & Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Marked.js para renderizado de Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.0/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header compact">
+            <div class="header-content">
+                <div class="header-title">
+                    <h1>📚 mxviz</h1>
+                </div>
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Buscar preguntas..." />
+                    <button id="search-btn">🔍</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar: Directory Tree -->
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <h2>📂 Categorías</h2>
+                    <button id="toggle-sidebar-btn" class="toggle-sidebar-btn" title="Colapsar/Expandir panel">◀</button>
+                </div>
+                <div id="loading" class="loading">Cargando...</div>
+                <div id="tree-container" class="tree"></div>
+            </aside>
+
+            <!-- Resizer -->
+            <div class="resizer" id="resizer"></div>
+
+            <!-- Editor Area -->
+            <main class="editor-area" id="editor-area">
+                <div id="welcome" class="welcome">
+                    <h2>Bienvenido a mxviz</h2>
+                    <p>Selecciona una pregunta del árbol de categorías para comenzar a editar.</p>
+                    <div class="features">
+                        <div class="feature">
+                            <span class="icon">📝</span>
+                            <h3>Edición Inline</h3>
+                            <p>Edita preguntas directamente con soporte Markdown</p>
+                        </div>
+                        <div class="feature">
+                            <span class="icon">🗂️</span>
+                            <h3>Navegación por Categorías</h3>
+                            <p>Organizado según estructura de directorios</p>
+                        </div>
+                        <div class="feature">
+                            <span class="icon">💾</span>
+                            <h3>Guardado Automático</h3>
+                            <p>Los cambios se guardan automáticamente en XML</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="editor" class="editor" style="display: none;">
+                    <!-- Question Header -->
+                    <div class="question-header">
+                        <div class="question-type-badge" id="question-type">tipo</div>
+                        <input type="text" id="question-name" class="question-name-input" placeholder="Nombre de la pregunta"/>
+                        <div class="question-actions">
+                            <button id="save-btn" class="btn btn-primary">💾 Guardar</button>
+                            <button id="cancel-btn" class="btn btn-secondary">✖️ Cancelar</button>
+                        </div>
+                    </div>
+
+                    <!-- Question Content -->
+                    <div class="question-content">
+                        <!-- Question Text -->
+                        <div class="form-group">
+                            <label for="question-text">📝 Enunciado de la Pregunta:</label>
+                            <div class="editor-tabs">
+                                <button class="tab-btn active" data-tab="edit" data-view="edit">✏️ Editar</button>
+                                <button class="tab-btn" data-tab="preview" data-view="preview">👁️ Vista Previa</button>
+                            </div>
+                            <div class="tab-content" id="edit-tab">
+                                <div class="editor-header">
+                                    <label for="questiontext-format" style="font-size: 0.9em;">Formato:</label>
+                                    <select id="questiontext-format" class="format-selector">
+                                        <option value="html">HTML</option>
+                                        <option value="markdown">Markdown</option>
+                                        <option value="moodle_auto_format">Moodle Auto Format</option>
+                                        <option value="plain">Texto Plano</option>
+                                    </select>
+                                </div>
+                                <textarea id="question-text" class="editor-textarea" rows="8"></textarea>
+                                <div class="editor-actions">
+                                    <button id="apply-fullwidth-btn" class="btn btn-small" title="Convertir caracteres especiales a fullwidth">🔄 Aplicar Fullwidth</button>
+                                    <button id="undo-fullwidth-btn" class="btn btn-small" title="Revertir caracteres fullwidth a normales">↩️ Deshacer Fullwidth</button>
+                                    <small class="hint">✨ Soporta Markdown: **negrita**, *cursiva*, `código`, etc.</small>
+                                </div>
+                            </div>
+                            <div class="tab-content preview-content" id="preview-tab" style="display: none;">
+                                <div id="question-preview" class="preview-box"></div>
+                            </div>
+                        </div>
+
+                        <!-- Answers Section -->
+                        <div class="form-group" id="answers-edit-section">
+                            <label>✅ Respuestas:</label>
+                            <div id="answers-container" class="answers-container"></div>
+                            <button id="add-answer-btn" class="btn btn-small">➕ Agregar Respuesta</button>
+                        </div>
+                        
+                        <!-- Answers Preview Section -->
+                        <div class="form-group" id="answers-preview-section" style="display: none;">
+                            <label>✅ Respuestas:</label>
+                            <div id="answers-preview-container" class="answers-preview-container"></div>
+                        </div>
+
+                        <!-- General Feedback -->
+                        <div class="form-group edit-only">
+                            <label for="general-feedback">💬 Retroalimentación General:</label>
+                            <textarea id="general-feedback" class="editor-textarea" rows="3"></textarea>
+                        </div>
+                        
+                        <!-- General Feedback Preview -->
+                        <div class="form-group preview-only" style="display: none;">
+                            <label>💬 Retroalimentación General:</label>
+                            <div id="general-feedback-preview" class="preview-box"></div>
+                        </div>
+
+                        <!-- Options -->
+                        <div class="options-grid edit-only">
+                            <div class="form-group">
+                                <label for="default-grade">🎯 Puntos:</label>
+                                <input type="number" id="default-grade" step="0.1" min="0"/>
+                            </div>
+                            <div class="form-group">
+                                <label for="penalty">⚠️ Penalización:</label>
+                                <input type="number" id="penalty" step="0.1" min="0" max="1"/>
+                            </div>
+                        </div>
+                        
+                        <!-- Options Preview -->
+                        <div class="options-preview preview-only" style="display: none;">
+                            <div class="preview-item">
+                                <span class="preview-label">🎯 Puntos:</span>
+                                <span id="default-grade-preview" class="preview-value"></span>
+                            </div>
+                            <div class="preview-item">
+                                <span class="preview-label">⚠️ Penalización:</span>
+                                <span id="penalty-preview" class="preview-value"></span>
+                            </div>
+                        </div>
+
+                        <!-- Type-specific options -->
+                        <div id="type-specific-options" class="type-specific edit-only"></div>
+                        
+                        <!-- Type-specific options preview -->
+                        <div id="type-specific-options-preview" class="type-specific-preview preview-only" style="display: none;"></div>
+
+                        <!-- Tags -->
+                        <div class="form-group edit-only">
+                            <label for="tags-input">🏷️ Tags:</label>
+                            <div id="tags-container" class="tags-container"></div>
+                            <input type="text" id="tags-input" placeholder="Agregar tag y presionar Enter"/>
+                        </div>
+                        
+                        <!-- Tags Preview -->
+                        <div class="form-group preview-only" style="display: none;">
+                            <label>🏷️ Tags:</label>
+                            <div id="tags-preview-container" class="tags-preview-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- Status Bar -->
+                    <div class="status-bar">
+                        <span id="status-message">Listo</span>
+                        <span id="file-path" class="file-path"></span>
+                    </div>
+                </div>
+                
+
+
+                <!-- Search Results -->
+                <div id="search-results" class="search-results" style="display: none;">
+                    <h2>🔍 Resultados de Búsqueda</h2>
+                    <div id="results-container"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Floating Navigation Bar -->
+    <div id="navigation-bar" class="navigation-bar floating" style="display: none;">
+        <div class="nav-controls">
+            <button id="first-btn" class="nav-btn" title="Primera pregunta">⏮️</button>
+            <button id="prev-btn" class="nav-btn" title="Pregunta anterior">◀️</button>
+            <span id="question-counter" class="question-counter">1 / 100</span>
+            <button id="next-btn" class="nav-btn" title="Siguiente pregunta">▶️</button>
+            <button id="last-btn" class="nav-btn" title="Última pregunta">⏭️</button>
+        </div>
+        <div class="nav-info">
+            <span id="nav-question-name"></span>
+        </div>
+    </div>
+
+    <!-- Floating Sidebar Toggle Button (visible when sidebar is collapsed) -->
+    <button id="floating-sidebar-toggle" class="floating-sidebar-toggle" title="Mostrar panel de categorías">📂</button>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
