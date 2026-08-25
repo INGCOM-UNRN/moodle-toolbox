@@ -36,14 +36,22 @@ El CLI `questions` se organiza en subcomandos especializados:
 
 ### 3. Conversión
 - `questions convert html-to-md`: Convierte etiquetas HTML a Markdown en archivos XML o GIFT.
-- *Nota: La conversión bidireccional XML ↔ GIFT está en proceso de integración completa.*
+- `questions convert xml-to-gift`: Convierte Moodle XML a GIFT (soporta categorías, selección múltiple con pesos, V/F, emparejamiento, numérica con tolerancia, ensayo y descripción).
+- `questions convert gift-to-xml`: Convierte GIFT a Moodle XML con bloques CDATA correctos. Ambos conversores viajan sobre el modelo unificado de preguntas del parser PEG y son estables en round-trip.
 
-### 4. Mantenimiento XML
+### 4. Árboles de Directorios (absorbe moodle-reorganizer)
+- `questions tree export banco.gift|xml -o dir/`: Exporta un banco monolítico a un árbol de carpetas por categoría (1 archivo por pregunta).
+- `questions tree collect dir/ -o reconstruido.gift|xml`: Recolecta el árbol nuevamente a un archivo único, restaurando las categorías.
+
+### 5. Editor Web (absorbe moodle-visor / mxviz)
+- `questions ui [dir]`: Abre un editor web local para navegar y editar preguntas organizadas en directorios, con soporte nativo de **Moodle XML y GIFT**. Requiere el extra opcional: `pip install questions[ui]`.
+
+### 6. Mantenimiento XML
 - `questions xml cdata`: Asegura que los bloques `<text>` usen secciones CDATA.
 - `questions xml clean-tags`: Elimina secciones de etiquetas (`<tags>`) redundantes.
 - `questions xml rename`: Renombra archivos XML basándose en el nombre interno de la pregunta.
 
-### 5. Inteligencia Artificial (Gemini)
+### 7. Inteligencia Artificial (Gemini)
 - `questions ai`: Mejora la calidad pedagógica (`improve`) o crea variaciones (`multiply`) de preguntas usando modelos de Google Gemini.
 
 ## 📚 Documentación Detallada
