@@ -36,6 +36,9 @@ class LazyGroup(click.Group):
         if cmd_name == 'tree':
             from questions.commands.tree import tree
             return tree
+        if cmd_name == 'synth':
+            from questions.commands.synth import synth
+            return synth
         return super().get_command(ctx, cmd_name)
 
 from questions.core.llm_instructions import get_instructions

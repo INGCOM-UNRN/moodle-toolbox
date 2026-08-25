@@ -172,6 +172,57 @@ class Question:
         return result
 
 
+def _llaves_balanceadas(texto: str) -> bool:
+    """True si las llaves del texto están balanceadas (ignorando escapes \\{ \\})."""
+    profundidad = 0
+    escapado = False
+    for ch in texto:
+        if escapado:
+            escapado = False
+            continue
+        if ch == "\\":
+            escapado = True
+            continue
+        if ch == "{":
+            profundidad += 1
+        elif ch == "}":
+            profundidad -= 1
+            if profundidad < 0:
+                return False
+    return profundidad == 0
+
+
+def _extraer_ultimo_grupo_llaves(texto: str):
+    r"""Localiza el ÚLTIMO grupo balanceado {..} del texto (ignora \{ \}).
+
+    Devuelve (antes, contenido) o None si no cierra al final.
+    """
+    texto = texto.rstrip()
+    if not texto.endswith("}"):
+        return None
+    escapados = set()
+    i = 0
+    n = len(texto)
+    while i < n:
+        if texto[i] == "\\":
+            escapados.add(i + 1)
+            i += 2
+        else:
+            i += 1
+    profundidad = 0
+    for j in range(n - 1, -1, -1):
+        if j in escapados:
+            continue
+        c = texto[j]
+        if c == "}":
+            profundidad += 1
+        elif c == "{":
+            profundidad -= 1
+            if profundidad == 0:
+                return texto[:j], texto[j + 1:-1]
+    return None
+
+
 class GiftSemantics:
     """Semantic actions for the GIFT parser."""
     
@@ -275,14 +326,18 @@ class GiftParser:
             line = lines[i]
             stripped = line.strip()
             
-            # Skip empty lines between questions
+            # Separador: una línea vacía corta el bloque sólo si el bloque
+            # actual tiene sus llaves balanceadas. Así, el código C embebido
+            # (que suele tener líneas vacías y llaves propias) permanece junto.
             if not stripped:
-                if current_block:
+                if current_block and _llaves_balanceadas("\n".join(current_block)):
                     q = self._parse_question_block(current_block, current_comments)
                     if q:
                         questions.append(q)
                     current_block = []
                     current_comments = []
+                elif current_block:
+                    current_block.append("")
                 i += 1
                 continue
             
@@ -303,6 +358,7 @@ class GiftParser:
                 
                 cat_title = stripped[10:].strip()
                 questions.append(Question(type="Category", title=cat_title))
+                pending_blank = False
                 i += 1
                 continue
             
@@ -334,11 +390,12 @@ class GiftParser:
             title = title_match.group(1).strip()
             text = title_match.group(2)
         
-        # Find answer block
-        brace_start = text.find('{')
-        brace_end = text.rfind('}')
-        
-        if brace_start == -1 or brace_end == -1:
+        # Extraer el bloque de respuestas como ÚLTIMO grupo balanceado de
+        # llaves (tolera código C embebido en el enunciado). Si el bloque
+        # previo contiene más llaves abiertas propias (cloze), caemos al
+        # comportamiento clásico de primera-llave.
+        partes = _extraer_ultimo_grupo_llaves(text)
+        if partes is None:
             # Description (no answer block)
             stem = semantics._parse_formatted_text(text)
             return Question(
@@ -349,8 +406,25 @@ class GiftParser:
                 tags=tags
             )
         
-        stem_before = text[:brace_start].strip()
-        answer_block = text[brace_start+1:brace_end].strip()
+        stem_before, answer_block = partes
+        stem_before = stem_before.strip()
+        answer_block = answer_block.strip()
+
+        brace_end = len(text) - 1
+        stem_after = ""
+        brace_start_alt = text.find('{')
+        hay_mas_grupos = "{" in stem_before and "}" in stem_before
+        es_cloze_heuristico = (
+            hay_mas_grupos
+            and "```" not in stem_before
+        )
+        if es_cloze_heuristico:
+            # cloze: las respuestas viven embebidas en el enunciado; se usa el
+            # comportamiento clásico de primera-llave para capturar stem_after.
+            brace_start = brace_start_alt
+            brace_end = text.rfind('}')
+            stem_before = text[:brace_start].strip()
+            answer_block = text[brace_start+1:brace_end].strip()
         stem_after = text[brace_end+1:].strip() if brace_end+1 < len(text) else ""
         
         # Parse stem with format
