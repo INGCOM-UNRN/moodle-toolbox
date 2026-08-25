@@ -3,7 +3,7 @@ import sys
 
 class LazyGroup(click.Group):
     def list_commands(self, ctx):
-        return ['ai', 'analyze', 'config', 'convert', 'fix', 'format', 'split', 'validate', 'xml']
+        return ['ai', 'analyze', 'config', 'convert', 'fix', 'format', 'split', 'tree', 'validate', 'xml']
 
     def get_command(self, ctx, cmd_name):
         if cmd_name == 'config':
@@ -33,6 +33,9 @@ class LazyGroup(click.Group):
         if cmd_name == 'fix':
             from questions.commands.fix import fix
             return fix
+        if cmd_name == 'tree':
+            from questions.commands.tree import tree
+            return tree
         return super().get_command(ctx, cmd_name)
 
 from questions.core.llm_instructions import get_instructions
