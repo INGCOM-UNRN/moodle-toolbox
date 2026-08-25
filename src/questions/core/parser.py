@@ -438,19 +438,28 @@ class GiftParser:
     def _parse_numerical(self, block: str, semantics: GiftSemantics) -> Question:
         """Parse numerical answer."""
         choices = []
-        
+
         # Check for global feedback
         global_feedback = None
         gf_match = re.search(r'####(.+)$', block, re.DOTALL)
         if gf_match:
             global_feedback = semantics._parse_formatted_text(gf_match.group(1))
             block = block[:gf_match.start()]
-        
+
+        # Primary answer without prefix (GIFT: {#23.5} o {#23.5:0.1 ~...})
+        primaria = None
+        m_primaria = re.match(r'^\s*([+-]?\d+(?:\.\d+)?(?::\s*[+-]?\d+(?:\.\d+)?)?)\s*(?=[=~]|$)', block, re.DOTALL)
+        if m_primaria:
+            primaria = m_primaria.group(1).strip()
+            block = block[m_primaria.end():]
+
         # Multiple numerical choices
         choice_pattern = re.compile(r'([=~])(%[+-]?\d+(?:\.\d+)?%)?([^=~#]*?)(?:#([^=~]*))?(?=[=~]|$)', re.DOTALL)
         matches = list(choice_pattern.finditer(block))
-        
+
         if matches:
+            if primaria:
+                choices.append(Choice(is_correct=True, text=FormattedText(text=primaria)))
             for m in matches:
                 symbol, weight, num_str, feedback = m.groups()
                 choice = Choice(
@@ -463,12 +472,10 @@ class GiftParser:
                 if num_str:
                     choice.text = FormattedText(text=num_str)
                 choices.append(choice)
-        else:
+        elif primaria:
             # Single numerical answer
-            num_str = block.strip()
-            if num_str:
-                choices.append(Choice(is_correct=True, text=FormattedText(text=num_str)))
-        
+            choices.append(Choice(is_correct=True, text=FormattedText(text=primaria)))
+
         return Question(type="Numerical", choices=choices, global_feedback=global_feedback)
     
     def _parse_matching(self, block: str, semantics: GiftSemantics) -> Question:

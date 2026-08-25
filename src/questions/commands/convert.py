@@ -1,6 +1,11 @@
 import click
+import re
 from pathlib import Path
-from questions.core.converter import convert_html_tags_to_markdown
+from questions.core.converter import (
+    convert_html_tags_to_markdown,
+    xml_to_gift,
+    gift_to_xml,
+)
 
 from questions.commands.common import llm_option
 
@@ -51,4 +56,43 @@ def html_to_md(paths, recursive):
     
     click.echo(f"\nFinalizado: {modified_count} archivos modificados.")
 
-# Por ahora dejo los otros como placeholders o los integro si son vitales
+
+def _leer_entrada(path: Path | None) -> str:
+    if path is None or str(path) == "-":
+        import sys
+        return sys.stdin.read()
+    return Path(path).read_text(encoding="utf-8")
+
+
+@convert.command(name="xml-to-gift")
+@click.argument("path", type=click.Path(), required=False)
+@click.option("-o", "--output", type=click.Path(), default=None, help="Archivo GIFT de salida (por defecto, stdout).")
+def xml_to_gift_cmd(path, output):
+    """Convierte Moodle XML a GIFT (PATH o stdin; '-' para stdin)."""
+    contenido = _leer_entrada(Path(path) if path else None)
+    try:
+        resultado = xml_to_gift(contenido)
+    except Exception as e:
+        raise click.ClickException(f"No se pudo convertir el XML: {e}")
+    if output:
+        Path(output).write_text(resultado, encoding="utf-8")
+        click.echo(f"✓ GIFT generado: {output}")
+    else:
+        click.echo(resultado)
+
+
+@convert.command(name="gift-to-xml")
+@click.argument("path", type=click.Path(), required=False)
+@click.option("-o", "--output", type=click.Path(), default=None, help="Archivo XML de salida (por defecto, stdout).")
+def gift_to_xml_cmd(path, output):
+    """Convierte GIFT a Moodle XML (PATH o stdin; '-' para stdin)."""
+    contenido = _leer_entrada(Path(path) if path else None)
+    try:
+        resultado = gift_to_xml(contenido)
+    except Exception as e:
+        raise click.ClickException(f"No se pudo convertir el GIFT: {e}")
+    if output:
+        Path(output).write_text(resultado, encoding="utf-8")
+        click.echo(f"✓ XML generado: {output}")
+    else:
+        click.echo(resultado)
