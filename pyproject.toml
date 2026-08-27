@@ -13,6 +13,7 @@ dependencies = [
 
 [project.scripts]
 questions = "questions.cli:main"
+moodle-toolbox = "questions.cli:main"
 
 [project.optional-dependencies]
 ui = [
