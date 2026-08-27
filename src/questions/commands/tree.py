@@ -1,7 +1,7 @@
 import click
 from pathlib import Path
 
-from questions.core import tree
+from questions.core import tree as core_tree
 from questions.commands.common import llm_option
 
 
@@ -24,7 +24,7 @@ def tree():
               help="Forzar el formato (por defecto se deduce de la extensión).")
 def export_cmd(archivo, dir_salida, formato):
     """Exporta ARCHIVO (banco monolítico) a un árbol de directorios."""
-    cantidad = tree.exportar(archivo, dir_salida, formato)
+    cantidad = core_tree.exportar(archivo, dir_salida, formato)
     if cantidad < 0:
         raise click.ClickException("La exportación falló.")
     click.echo(f"\nÁrbol generado en: {dir_salida}")
@@ -38,7 +38,7 @@ def export_cmd(archivo, dir_salida, formato):
               help="Forzar el formato (por defecto se deduce de la extensión de salida).")
 def collect_cmd(directorio, archivo_salida, formato):
     """Recolecta DIRECTORIO en un banco monolítico único."""
-    cantidad = tree.recolectar(directorio, archivo_salida, formato)
+    cantidad = core_tree.recolectar(directorio, archivo_salida, formato)
     if cantidad == 0:
         click.echo("No se recolectó ninguna pregunta.", err=True)
         raise click.Exit(code=1)
