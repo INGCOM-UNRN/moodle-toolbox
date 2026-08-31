@@ -176,3 +176,53 @@ check-moodle_toolbox:
 ````
 
 Ejecutá `make check-moodle_toolbox` antes de cada commit para asegurar que tu código conserve el estado de aprobación.
+
+---
+
+(manual-moodle_toolbox-arquitectura)=
+## 7. Arquitectura Interna y Mecanismo Técnico
+
+La herramienta **`moodle-toolbox`** implementa un motor de alta precisión basado en:
+
+- **Tecnología Núcleo:** `Moodle XML Parser / Serializer + GIFT Grammar Lexer + LanguageTool REST Client`.
+- **Aislamiento y Determinismo:** Diseñada para operar sin efectos colaterales en entornos de integración continua (CI), terminales de estudiantes y servidores docentes headless.
+- **Manejo de Errores Pedagógico:** Todo fallo de sintaxis, memoria o lógica se traduce en una acción prescriptiva concreta con su respectiva justificación técnica.
+
+---
+
+(manual-moodle_toolbox-ecosistema)=
+## 8. Integración y Conexión con el Ecosistema
+
+````{note}
+Ninguna herramienta opera de forma aislada. **`moodle-toolbox`** forma parte del pipeline integral de evaluación, verificación y enseñanza de la cátedra.
+````
+
+### Diagrama de Flujo e Interoperabilidad
+
+````{mermaid}
+graph TD
+    GIFT[Archivos GIFT / Texto] --> MT[Moodle-Toolbox: Gestor de Bancos]
+    XML[Archivos Moodle XML] --> MT
+    MT -->|Corrección Ortográfica| LT[LanguageTool API]
+    MT -->|Conversión Bidireccional| ALU[Alucard: Generador Exámenes]
+    MT -->|Bancos Validados| CAMPUS[Campus Virtual Moodle]
+````
+
+### Matriz de Intercambio de Datos
+
+| Canal | Herramientas Conectadas | Tipo de Datos Transferidos |
+| :--- | :--- | :--- |
+| **Entradas (Inputs)** | - `Bancos GIFT y XML de Alucard, Idkfa y docentes` | Código fuente, AST, binarios, testcases, contratos |
+| **Salidas (Outputs)** | - `Campus Virtual Moodle (bancos limpios)`
+- `alucarD (preguntas normalizadas)` | Informes Markdown, diagnósticos Rich, JSON, actas |
+| **Sincronización** | `alucarD`, `idkfa`, `myst-tools` | Validación cruzada, flags compartidos y autofix |
+
+### Pipeline de Integración Recomendado
+
+Podés encadenar `moodle-toolbox` con otras herramientas del ecosistema en una única línea de comando:
+
+````{code-block} bash
+# Pipeline de integración típico
+questions convert banco.gift -o banco.xml && questions spellcheck banco.xml --premium
+````
+
