@@ -347,3 +347,12 @@ Podés encadenar `moodle-toolbox` con otras herramientas del ecosistema en una �
 questions convert banco.gift -o banco.xml && questions spellcheck banco.xml --premium
 ````
 
+---
+
+(manual-moodle_toolbox-seccion-plugins)=
+## 9. Extensión, Desarrollo de Plugins y API Python
+
+Para crear tus propias reglas, conectores de evaluación o integrar `moodle-toolbox` programáticamente en pipelines de CI/CD:
+
+- 👉 **Consultá la guía completa:** [Guía de Extensión y Creación de Plugins](plugins.md)
+
