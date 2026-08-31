@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 import os
 import re
 import argparse
 import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from dotenv import load_dotenv
-from google import genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
 from questions.core.config import get_api_key, get_model
 
 def load_config():
     """Load configuration and return GenAI Client."""
+    if genai is None:
+        raise ImportError("El paquete 'google-genai' no está instalado. Instálalo con 'pip install google-genai'.")
     api_key = get_api_key()
     if not api_key:
         raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")
