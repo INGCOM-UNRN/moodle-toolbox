@@ -4,6 +4,37 @@ Conjunto de herramientas unificadas en Python para gestionar preguntas de Moodle
 
 Todas las herramientas anteriores han sido consolidadas en un único comando raíz: `questions`.
 
+---
+
+## 🎯 Alcance
+
+### Qué cubre
+- Gestión integral, validación y mantenimiento de bancos de preguntas pedagógicas de Moodle.
+- Conversión bidireccional fiel y sin pérdida entre formatos GIFT y Moodle XML.
+- Normalización tipográfica de delimitadores de fórmulas matemáticas (LaTeX `\(...\)` y `\[...\]`) y bloques de código Markdown.
+- Validación sintáctica y de completitud de metadatos de preguntas (retroalimentación, pesos porcentuales, categorías).
+- Reorganización y sincronización de estructuras de directorios de categorías de preguntas.
+
+### Qué no cubre (Límites y Delegación)
+- Síntesis procedimental de variantes con validación de GCC (delegado a `idkfa`).
+- Generación de exámenes en PDF con reconocimiento OMR (delegado a `alucard`).
+- Creación de módulos de aprendizaje SCORM (delegado a `scorm-tools`).
+
+---
+
+## 📋 Requisitos
+
+### Requisitos de Sistema y Entorno
+- Multiplataforma. Python >= 3.10.
+
+### Dependencias Externas y Binarios
+- Ninguno obligatorio.
+
+### Integración en el Ecosistema
+- CLI `moodle-toolbox` (y alias `questions`). Subcomando `doctor`.
+
+---
+
 ## 🚀 Instalación y Uso
 
 Este proyecto utiliza [uv](https://docs.astral.sh/uv/) para la gestión de dependencias y ejecución.
@@ -62,11 +93,6 @@ Para más información sobre funcionalidades específicas, consulta la carpeta [
 - **[Validación y Análisis](./docs/README_validate_questions.md)**
 - **[Mantenimiento XML](./docs/README_xml_maintenance.md)**
 - **[Referencia de Caracteres Especiales](./docs/caracteres_especiales.md)**
-
-## 📋 Requisitos
-
-- **Python 3.11+**
-- **Dependencias**: tatsu, google-genai, click, python-dotenv (gestionadas por `uv`).
 
 ## ✍️ Autor
 
