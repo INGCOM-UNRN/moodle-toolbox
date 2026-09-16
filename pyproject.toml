@@ -3,7 +3,27 @@ name = "questions"
 version = "0.1.0"
 description = "Herramientas para gestionar preguntas de Moodle (GIFT, XML)"
 readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Martín René Vilugrón", email = "martinvilu@gmail.com"}
+]
+maintainers = [
+    {name = "Programación I [B6003] - UNRN Andina"}
+]
 requires-python = ">=3.11"
+keywords = ["education", "c-programming", "pedagogical-tools", "unrn"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Education",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
 dependencies = [
     "tatsu>=5.15.1",
     "python-dotenv",
@@ -14,6 +34,11 @@ dependencies = [
 [project.scripts]
 questions = "questions.cli:main"
 moodle-toolbox = "questions.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox"
+Repository = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox.git"
+Issues = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox/issues"
 
 [project.optional-dependencies]
 ui = [
@@ -35,4 +60,3 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/questions"]
-
