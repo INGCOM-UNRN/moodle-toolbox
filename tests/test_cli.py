@@ -9,6 +9,20 @@ def test_cli_help():
     assert 'ai' in result.output
     assert 'validate' in result.output
 
+
+def test_cli_doctor():
+    runner = CliRunner()
+    result = runner.invoke(cli, ['doctor'])
+    assert result.exit_code == 0
+    assert 'Diagnóstico del Entorno MOODLE-TOOLBOX' in result.output
+
+    res_json = runner.invoke(cli, ['doctor', '--json'])
+    assert res_json.exit_code == 0
+    assert '"schema_version": "1.0.0"' in res_json.output
+    assert '"herramienta": "moodle-toolbox"' in res_json.output
+    assert '"ok": true' in res_json.output
+
+
 def test_cli_validate_file(tmp_path):
     f = tmp_path / "test.gift"
     f.write_text("::Title:: Q{=A}")
