@@ -63,6 +63,13 @@ SPLIT_INSTRUCTIONS = r"""
 3. **Consistencia**: Al dividir, se mantiene el contenido exacto de cada bloque. Verifica que cada bloque resultante sea una pregunta GIFT válida e independiente.
 """
 
+UNIFY_INSTRUCTIONS = r"""
+# Instrucciones para LLM: Unificar Árboles y Colecciones de Preguntas
+1. **Opuesto a Split / Tree Export**: Recopila múltiples archivos individuales o directorios con preguntas en un solo archivo monolítico (.gift o .xml).
+2. **Preservación de Categorías**: Deduce las categorías de la estructura de subdirectorios o directivas `$CATEGORY` / `<question type="category">` existentes.
+3. **Soporte Biformato**: Funciona transparentemente para GIFT y Moodle XML deduciendo el formato por la extensión de salida o mediante `-f/--format`.
+"""
+
 def get_instructions(command_name):
     mapping = {
         'validate': VALIDATE_INSTRUCTIONS,
@@ -72,6 +79,7 @@ def get_instructions(command_name):
         'convert': CONVERT_INSTRUCTIONS,
         'ai': AI_INSTRUCTIONS,
         'fix': FIX_INSTRUCTIONS,
-        'split': SPLIT_INSTRUCTIONS
+        'split': SPLIT_INSTRUCTIONS,
+        'unify': UNIFY_INSTRUCTIONS,
     }
     return mapping.get(command_name, GENERAL_INSTRUCTIONS)
