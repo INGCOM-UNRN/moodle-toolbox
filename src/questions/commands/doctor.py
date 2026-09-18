@@ -9,7 +9,7 @@ import click
 @click.command("doctor")
 @click.option("--json", "json_output", is_flag=True, help="Emitir diagnóstico en formato JSON estructurado.")
 def doctor_cmd(json_output: bool):
-    """Verifica el estado del entorno de MOODLE-TOOLBOX (Python, TatSu, LanguageTool)."""
+    """Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis)."""
     diagnostico = []
 
     py_ok = sys.version_info >= (3, 10)
@@ -20,21 +20,6 @@ def doctor_cmd(json_output: bool):
         "detalle": f"Python {sys.version.split()[0]}",
     })
 
-    try:
-        import tatsu
-        tatsu_ok = True
-        tatsu_detail = f"TatSu {getattr(tatsu, '__version__', 'instalado')}"
-    except ImportError:
-        tatsu_ok = False
-        tatsu_detail = "No instalado (requerido para el parser de preguntas GIFT)"
-
-    diagnostico.append({
-        "componente": "Parser TatSu (GIFT)",
-        "estado": "OK" if tatsu_ok else "ERROR",
-        "requerido": True,
-        "detalle": tatsu_detail,
-    })
-
     lt_path = shutil.which("languagetool") or shutil.which("languagetool-server")
     diagnostico.append({
         "componente": "LanguageTool Local",
@@ -43,7 +28,36 @@ def doctor_cmd(json_output: bool):
         "detalle": lt_path or "No encontrado (se usará API remota si no hay servidor local)",
     })
 
-    todo_ok = py_ok and tatsu_ok
+    # Requisitos de `synth`: compilar y ejecutar los snippets (gcc) y el motor de alucarD.
+    gcc_path = shutil.which("gcc")
+    diagnostico.append({
+        "componente": "Compilador GCC (comando synth)",
+        "estado": "OK" if gcc_path else "ADVERTENCIA",
+        "requerido": False,
+        "detalle": gcc_path or "No encontrado: `synth` compila los snippets para verificar su salida",
+    })
+
+    try:
+        from questions.core import synth as _synth  # noqa: F401
+        motor_ok, motor_detalle = True, "generador_examenes.synthesizer disponible"
+    except ImportError:
+        motor_ok, motor_detalle = False, "No instalado: `synth` delega en el motor del paquete alucarD"
+    diagnostico.append({
+        "componente": "Motor de síntesis (alucarD)",
+        "estado": "OK" if motor_ok else "ADVERTENCIA",
+        "requerido": False,
+        "detalle": motor_detalle,
+    })
+
+    import os
+    diagnostico.append({
+        "componente": "GEMINI_API_KEY (comando ai)",
+        "estado": "OK" if os.getenv("GEMINI_API_KEY") else "ADVERTENCIA",
+        "requerido": False,
+        "detalle": "Definida" if os.getenv("GEMINI_API_KEY") else "No definida: `ai` la exige (ver `config`)",
+    })
+
+    todo_ok = py_ok
 
     if json_output:
         payload = {

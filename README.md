@@ -16,7 +16,7 @@ Todas las herramientas anteriores han sido consolidadas en un único comando ra�
 - Reorganización y sincronización de estructuras de directorios de categorías de preguntas.
 
 ### Qué no cubre (Límites y Delegación)
-- Síntesis procedimental de variantes con validación de GCC (delegado a `idkfa`).
+- Generación de preguntas de C con salida verificada por compilación: el comando `synth` **invoca** el motor de síntesis de `alucarD` (`generador_examenes.synthesizer`); la lógica de plantillas y su validación con GCC vive allí, no acá.
 - Generación de exámenes en PDF con reconocimiento OMR (delegado a `alucard`).
 - Creación de módulos de aprendizaje SCORM (delegado a `scorm-tools`).
 
@@ -28,7 +28,11 @@ Todas las herramientas anteriores han sido consolidadas en un único comando ra�
 - Multiplataforma. Python >= 3.10.
 
 ### Dependencias Externas y Binarios
-- Ninguno obligatorio.
+- Para los comandos de gestión de bancos (conversión, validación, limpieza): ninguna.
+- `synth`: `gcc` (compila y ejecuta los snippets para verificar su salida) y el paquete `alucarD`, que aporta el motor de síntesis.
+- `ai`: una `GEMINI_API_KEY` (se guarda con el comando `config`).
+- LanguageTool (local o API remota) para la revisión ortográfica opcional.
+- `moodle-toolbox doctor` informa cuáles de estos requisitos están presentes.
 
 ### Integración en el Ecosistema
 - CLI `moodle-toolbox` (y alias `questions`). Subcomando `doctor`.

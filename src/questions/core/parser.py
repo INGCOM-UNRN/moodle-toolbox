@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Parser para archivos GIFT usando gramática PEG con TatSu.
-Genera un parser a partir de la gramática GIFT y permite parsear archivos .gift
+Parser para archivos GIFT: recorre el contenido por bloques y arma el modelo de preguntas
+(el análisis es manual; no usa un generador de parsers).
 """
 
 import re
@@ -11,78 +11,6 @@ from pathlib import Path
 from dataclasses import dataclass, field, asdict
 from typing import Optional, Any
 from enum import Enum
-
-import tatsu
-from tatsu.ast import AST
-
-
-# Gramática GIFT en formato TatSu/EBNF
-GIFT_GRAMMAR = r'''
-@@grammar::GIFT
-@@whitespace :: //
-
-start = { item }+ $ ;
-
-item = category | question_with_answers | description ;
-
-category = __ '$CATEGORY:' ~ /[^\n\r]+/ eol { blank_line }* ;
-
-description = __ { tag_comment }* [ title ] stem:rich_text { blank_line }+ ;
-
-question_with_answers = __ { tag_comment }* [ title ] stem1:[ question_stem ] '{' ~ answers '}' stem2:[ question_stem ] { blank_line }+ ;
-
-title = '::' ~ @:/[^:]+(?::(?!:)[^:]*)*/ '::' ;
-
-tag_comment = '//' ~ @:/[^\n\r]*/ eol ;
-
-question_stem = rich_text ;
-
-answers = matching_answers | tf_answer | mc_answers | numerical_answers | short_answer | essay_answer ;
-
-matching_answers = { match }+ [ global_feedback ] ;
-match = _ '=' _ [ match_text ] '->' _ plain_text _ ;
-match_text = [ format ] /(?:(?!->)[^\n\r{}=~#])+/ ;
-
-tf_answer = true_false [ feedback ] [ feedback ] [ global_feedback ] ;
-true_false = 'TRUE' | 'T' | 'FALSE' | 'F' ;
-
-mc_answers = { choice }+ [ global_feedback ] ;
-choice = _ /[=~]/ [ weight ] _ rich_text [ feedback ] _ ;
-
-weight = '%' ~ @:/[+-]?\d+(?:\.\d+)?/ '%' ;
-
-numerical_answers = '#' ~ ( { numerical_choice }+ | single_numerical ) [ global_feedback ] ;
-numerical_choice = _ /[=~]/ [ weight ] [ single_numerical ] [ feedback ] _ ;
-single_numerical = number_range | number_high_low | number_alone ;
-number_range = number ':' number ;
-number_high_low = number '..' number ;
-number_alone = number ;
-number = /[+-]?\d+(?:\.\d+)?/ ;
-
-short_answer = rich_text [ feedback ] [ global_feedback ] ;
-
-essay_answer = [ global_feedback ] ;
-
-feedback = '#' !'###' ~ [ rich_text ] ;
-
-global_feedback = '####' ~ rich_text ;
-
-rich_text = [ format ] text_content ;
-format = '[' @/html|markdown|plain|moodle/ ']' ;
-text_content = { text_char }+ ;
-text_char = escape_sequence | /[^\n\r{}=~#\\]/ | /(?=#(?!#))/ ;
-
-plain_text = { /[^\n\r{}=~#\\]/ | escape_sequence }+ ;
-
-escape_sequence = /\\[:\\#={}~n\\]/ ;
-
-_ = /[ \t]*/ ;
-__ = { /[ \t\n\r]/ | tag_comment_skip }* ;
-tag_comment_skip = '//' /[^\n\r]*/ eol ;
-eol = /\r\n|\n|\r/ ;
-blank_line = /[ \t]*/ eol ;
-'''
-
 
 class QuestionType(Enum):
     CATEGORY = "Category"
@@ -276,13 +204,6 @@ class GiftSemantics:
         if isinstance(ast, str):
             return FormattedText(text=self._decode_escapes(ast.strip()))
         
-        if isinstance(ast, AST):
-            fmt = ast.get('format', self.current_format) or self.current_format
-            text = ast.get('text_content', '') or ''
-            if isinstance(text, list):
-                text = ''.join(str(t) for t in text)
-            return FormattedText(format=fmt, text=self._decode_escapes(text.strip()))
-        
         if isinstance(ast, list):
             text = ''.join(str(t) for t in ast)
             return FormattedText(text=self._decode_escapes(text.strip()))
@@ -293,28 +214,8 @@ class GiftSemantics:
 class GiftParser:
     """Parser for GIFT format questions."""
     
-    def __init__(self):
-        self._parser = None
-        self._compile_parser()
-    
-    def _compile_parser(self):
-        """Compile the GIFT grammar."""
-        try:
-            self._parser = tatsu.compile(GIFT_GRAMMAR)
-        except Exception as e:
-            raise RuntimeError(f"Error compiling GIFT grammar: {e}")
-    
-    def _parse_raw(self, content: str) -> list:
-        """Parse content using the PEG grammar and return raw AST."""
-        try:
-            ast = self._parser.parse(content)
-            return ast if ast else []
-        except Exception:
-            # Fall back to manual parsing
-            return self._manual_parse(content)
-    
     def _manual_parse(self, content: str) -> list:
-        """Manual fallback parser for GIFT format."""
+        """Parsea contenido GIFT línea a línea y devuelve la lista de preguntas (único parser del paquete)."""
         questions = []
         lines = content.split('\n')
         

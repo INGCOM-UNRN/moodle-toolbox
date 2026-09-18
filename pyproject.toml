@@ -25,7 +25,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "tatsu>=5.15.1",
     "python-dotenv",
     "click>=8.0.0",
     "google-genai>=2.4.0",
