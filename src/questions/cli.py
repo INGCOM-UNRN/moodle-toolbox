@@ -7,7 +7,7 @@ from click.shell_completion import get_completion_class
 
 class LazyGroup(click.Group):
     def list_commands(self, ctx):
-        return ['ai', 'analyze', 'config', 'convert', 'doctor', 'fix', 'format', 'health', 'languagetool', 'spellcheck', 'split', 'synth', 'tree', 'unify', 'validate', 'xml']
+        return ['ai', 'analyze', 'config', 'convert', 'doctor', 'fix', 'format', 'health', 'languagetool', 'spellcheck', 'split', 'synth', 'tree', 'ui', 'unify', 'validate', 'xml']
 
     def get_command(self, ctx, cmd_name):
         if cmd_name == 'doctor':
@@ -52,6 +52,9 @@ class LazyGroup(click.Group):
         if cmd_name == 'synth':
             from questions.commands.synth import synth
             return synth
+        if cmd_name == 'ui':
+            from questions.commands.ui import ui
+            return ui
         if cmd_name in ('spellcheck', 'languagetool', 'grammar'):
             from questions.commands.spellcheck import spellcheck
             return spellcheck
