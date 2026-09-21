@@ -1,3 +1,4 @@
+import os
 import sys
 
 import click
@@ -79,7 +80,9 @@ def main():
     try:
         cli()
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        if os.environ.get("QUESTIONS_DEBUG"):
+            raise
+        click.echo(f"Error: {e} (QUESTIONS_DEBUG=1 muestra el traceback completo)", err=True)
         sys.exit(1)
 
 
