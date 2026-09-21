@@ -1,20 +1,25 @@
 import click
+import typer
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import List, Optional
 from questions.core.xml_tools import ensure_cdata_in_text_blocks, sanitize_filename, remove_tags_from_xml
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION
 
-@click.group()
-@llm_option
-def xml():
+xml_app = typer.Typer(help="Herramientas para archivos XML de Moodle.")
+
+
+@xml_app.callback()
+def xml_group(llm: bool = LLM_OPTION):
     """Herramientas para archivos XML de Moodle."""
-    pass
 
-@xml.command()
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def cdata(paths, recursive):
+
+@xml_app.command()
+def cdata(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Asegura que los bloques <text> usen CDATA."""
     if not paths:
         paths = ['.']
@@ -35,10 +40,11 @@ def cdata(paths, recursive):
             f.write_text(new_content, encoding='utf-8')
             click.echo(f"✓ {f}: {count} bloques actualizados")
 
-@xml.command()
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def clean_tags(paths, recursive):
+@xml_app.command()
+def clean_tags(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Elimina tags de las preguntas XML."""
     if not paths:
         paths = ['.']
@@ -63,10 +69,11 @@ def clean_tags(paths, recursive):
         except Exception as e:
             click.echo(f"Error en {f}: {e}", err=True)
 
-@xml.command()
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def rename(paths, recursive):
+@xml_app.command()
+def rename(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Renombra archivos XML según el nombre de la pregunta."""
     if not paths:
         paths = ['.']

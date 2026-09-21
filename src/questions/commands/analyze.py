@@ -1,20 +1,27 @@
-import click
 from pathlib import Path
+from typing import List, Optional
+
+import click
+import typer
+
 from questions.core.validator import GiftAnalyzer
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION
 
-@click.group()
-@llm_option
-def analyze():
+analyze_app = typer.Typer(help="Análisis y estadísticas de preguntas.")
+
+
+@analyze_app.callback()
+def analyze(llm: bool = LLM_OPTION):
     """Análisis y estadísticas de preguntas."""
-    pass
 
-@analyze.command(name="stats")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Buscar recursivamente')
-@click.option('-o', '--output', help='Archivo de salida para el informe')
-def stats(paths, recursive, output):
+
+@analyze_app.command(name="stats")
+def stats(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente"),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo de salida para el informe"),
+):
     """Genera estadísticas de un directorio de preguntas."""
     if not paths:
         paths = ['.']
@@ -32,11 +39,12 @@ def stats(paths, recursive, output):
     if not output:
         click.echo(report)
 
-@analyze.command(name="similar")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Buscar recursivamente')
-@click.option('-s', '--similarity', type=float, default=0.85, help='Threshold de similitud')
-def similar(paths, recursive, similarity):
+@analyze_app.command(name="similar")
+def similar(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente"),
+    similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold de similitud"),
+):
     """Encuentra preguntas similares en un directorio."""
     if not paths:
         paths = ['.']

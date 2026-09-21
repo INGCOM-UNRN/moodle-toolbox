@@ -1,14 +1,19 @@
-import click
 from pathlib import Path
-from questions.core.splitter import split_file
-from questions.commands.common import llm_option
+from typing import List, Optional
 
-@click.command()
-@llm_option
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente.')
-@click.option('--remove', is_flag=True, help='Borrar el archivo original después de dividirlo.')
-def split(paths, recursive, remove):
+import click
+import typer
+
+from questions.core.splitter import split_file
+from questions.commands.common import LLM_OPTION
+
+
+def split(
+    paths: Optional[List[Path]] = typer.Argument(None, exists=True),
+    llm: bool = LLM_OPTION,
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente."),
+    remove: bool = typer.Option(False, "--remove", help="Borrar el archivo original después de dividirlo."),
+):
     """Divide archivos GIFT con múltiples preguntas en archivos individuales."""
     if not paths:
         paths = ['.']

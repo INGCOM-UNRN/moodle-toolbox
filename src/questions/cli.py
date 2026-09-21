@@ -1,140 +1,78 @@
-import os
 import sys
-from pathlib import Path
+
 import click
-from click.shell_completion import get_completion_class
-
-
-class LazyGroup(click.Group):
-    def list_commands(self, ctx):
-        return ['ai', 'analyze', 'config', 'convert', 'doctor', 'fix', 'format', 'health', 'languagetool', 'spellcheck', 'split', 'synth', 'tree', 'ui', 'unify', 'validate', 'xml']
-
-    def get_command(self, ctx, cmd_name):
-        if cmd_name == 'doctor':
-            from questions.commands.doctor import doctor_cmd
-            return doctor_cmd
-        if cmd_name == 'health':
-            from questions.commands.health import health_cmd
-            return health_cmd
-        if cmd_name == 'config':
-            from questions.commands.config import config
-            return config
-        if cmd_name == 'split':
-            from questions.commands.split import split
-            return split
-        if cmd_name == 'unify':
-            from questions.commands.unify import unify
-            return unify
-        if cmd_name == 'ai':
-            from questions.commands.ai import ai
-            return ai
-        if cmd_name == 'validate':
-            from questions.commands.validate import validate
-            return validate
-        if cmd_name == 'format':
-            from questions.commands.format import format_cmd
-            return format_cmd
-        if cmd_name == 'convert':
-            from questions.commands.convert import convert
-            return convert
-        if cmd_name == 'xml':
-            from questions.commands.xml import xml
-            return xml
-        if cmd_name == 'analyze':
-            from questions.commands.analyze import analyze
-            return analyze
-        if cmd_name == 'fix':
-            from questions.commands.fix import fix
-            return fix
-        if cmd_name == 'tree':
-            from questions.commands.tree import tree
-            return tree
-        if cmd_name == 'synth':
-            from questions.commands.synth import synth
-            return synth
-        if cmd_name == 'ui':
-            from questions.commands.ui import ui
-            return ui
-        if cmd_name in ('spellcheck', 'languagetool', 'grammar'):
-            from questions.commands.spellcheck import spellcheck
-            return spellcheck
-        return super().get_command(ctx, cmd_name)
-
+import typer
 
 from questions.core.llm_instructions import get_instructions
 
-
-def _get_shell():
-    shell_path = os.environ.get("SHELL", "bash")
-    shell_name = os.path.basename(shell_path)
-    if "zsh" in shell_name:
-        return "zsh"
-    elif "fish" in shell_name:
-        return "fish"
-    return "bash"
-
-
-def show_completion_callback(ctx, param, value):
-    if not value or ctx.resilient_parsing:
-        return
-    shell = _get_shell()
-    prog_name = ctx.info_name or "questions"
-    complete_var = f"_{prog_name.upper().replace('-', '_')}_COMPLETE"
-    comp_cls = get_completion_class(shell)
-    if comp_cls:
-        comp = comp_cls(ctx.command, {}, prog_name, complete_var)
-        click.echo(comp.source())
-    ctx.exit()
-
-
-def install_completion_callback(ctx, param, value):
-    if not value or ctx.resilient_parsing:
-        return
-    shell = _get_shell()
-    prog_name = ctx.info_name or "questions"
-    complete_var = f"_{prog_name.upper().replace('-', '_')}_COMPLETE"
-    comp_cls = get_completion_class(shell)
-    if comp_cls:
-        comp = comp_cls(ctx.command, {}, prog_name, complete_var)
-        source_code = comp.source()
-        home = Path.home()
-        comp_dir = home / ".bash_completions"
-        if comp_dir.is_dir() and shell == "bash":
-            target_file = comp_dir / f"{prog_name}.bash"
-            target_file.write_text(source_code, encoding="utf-8")
-            click.echo(f"Completion installed in {target_file}")
-        else:
-            rc_file = home / f".{shell}rc"
-            if rc_file.is_file():
-                eval_line = f'eval "$({complete_var}={shell}_source {prog_name})"\n'
-                content = rc_file.read_text(encoding="utf-8")
-                if eval_line not in content:
-                    with open(rc_file, "a", encoding="utf-8") as f:
-                        f.write(f"\n# {prog_name} completion\n{eval_line}")
-                click.echo(f"Completion installed in {rc_file}")
-    ctx.exit()
+from questions.commands.ai import ai
+from questions.commands.analyze import analyze_app
+from questions.commands.config import config_app
+from questions.commands.convert import convert_app
+from questions.commands.doctor import doctor_cmd
+from questions.commands.fix import fix_app
+from questions.commands.format import format_cmd
+from questions.commands.health import health_cmd
+from questions.commands.spellcheck import spellcheck
+from questions.commands.split import split
+from questions.commands.synth import synth
+from questions.commands.tree import tree_app
+from questions.commands.ui import ui
+from questions.commands.unify import unify
+from questions.commands.validate import validate
+from questions.commands.xml import xml_app
 
 
 def llm_callback(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    click.echo(get_instructions(ctx.command.name))
+    click.echo(get_instructions(ctx.info_name))
     ctx.exit()
 
 
-@click.group(cls=LazyGroup)
-@click.option('--llm', is_flag=True, callback=llm_callback, 
-              expose_value=False, is_eager=True,
-              help='Muestra instrucciones generales para un LLM.')
-@click.option('--show-completion', is_flag=True, callback=show_completion_callback,
-              expose_value=False, is_eager=True,
-              help='Show completion for the current shell, to copy it or customize the installation.')
-@click.option('--install-completion', is_flag=True, callback=install_completion_callback,
-              expose_value=False, is_eager=True,
-              help='Install completion for the current shell.')
-def cli():
+app = typer.Typer(
+    help="Herramientas para la gestión de preguntas de Moodle.",
+    no_args_is_help=True,
+    pretty_exceptions_enable=False,
+)
+
+
+@app.callback()
+def main_callback(
+    llm: bool = typer.Option(
+        False,
+        "--llm",
+        callback=llm_callback,
+        is_eager=True,
+        help="Muestra instrucciones generales para un LLM.",
+    ),
+):
     """Herramientas para la gestión de preguntas de Moodle."""
-    pass
+
+
+app.command("doctor")(doctor_cmd)
+app.command("health")(health_cmd)
+app.command("ai")(ai)
+app.command("validate")(validate)
+app.command("format")(format_cmd)
+app.command("split")(split)
+app.command("unify")(unify)
+app.command("synth")(synth)
+app.command("ui")(ui)
+app.command("spellcheck")(spellcheck)
+# Alias históricos de `spellcheck` (LanguageTool).
+app.command("languagetool")(spellcheck)
+app.command("grammar")(spellcheck)
+
+app.add_typer(config_app, name="config")
+app.add_typer(convert_app, name="convert")
+app.add_typer(fix_app, name="fix")
+app.add_typer(analyze_app, name="analyze")
+app.add_typer(tree_app, name="tree")
+app.add_typer(xml_app, name="xml")
+
+cli = typer.main.get_command(app)
+cli.name = "questions"
 
 
 def main():

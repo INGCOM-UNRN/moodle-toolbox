@@ -1,24 +1,29 @@
 import click
 import re
+import typer
 from pathlib import Path
+from typing import List, Optional
 from questions.core.converter import (
     convert_html_tags_to_markdown,
     xml_to_gift,
     gift_to_xml,
 )
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION, fail
 
-@click.group()
-@llm_option
-def convert():
+convert_app = typer.Typer(help="Comandos para convertir entre formatos.")
+
+
+@convert_app.callback()
+def convert(llm: bool = LLM_OPTION):
     """Comandos para convertir entre formatos."""
-    pass
 
-@convert.command(name="html-to-md")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def html_to_md(paths, recursive):
+
+@convert_app.command(name="html-to-md")
+def html_to_md(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Convierte tags HTML a Markdown en archivos XML o GIFT."""
     if not paths:
         paths = ['.']
@@ -64,16 +69,17 @@ def _leer_entrada(path: Path | None) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-@convert.command(name="xml-to-gift")
-@click.argument("path", type=click.Path(), required=False)
-@click.option("-o", "--output", type=click.Path(), default=None, help="Archivo GIFT de salida (por defecto, stdout).")
-def xml_to_gift_cmd(path, output):
+@convert_app.command(name="xml-to-gift")
+def xml_to_gift_cmd(
+    path: Optional[str] = typer.Argument(None),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo GIFT de salida (por defecto, stdout)."),
+):
     """Convierte Moodle XML a GIFT (PATH o stdin; '-' para stdin)."""
     contenido = _leer_entrada(Path(path) if path else None)
     try:
         resultado = xml_to_gift(contenido)
     except Exception as e:
-        raise click.ClickException(f"No se pudo convertir el XML: {e}")
+        fail(f"No se pudo convertir el XML: {e}")
     if output:
         Path(output).write_text(resultado, encoding="utf-8")
         click.echo(f"✓ GIFT generado: {output}")
@@ -81,16 +87,17 @@ def xml_to_gift_cmd(path, output):
         click.echo(resultado)
 
 
-@convert.command(name="gift-to-xml")
-@click.argument("path", type=click.Path(), required=False)
-@click.option("-o", "--output", type=click.Path(), default=None, help="Archivo XML de salida (por defecto, stdout).")
-def gift_to_xml_cmd(path, output):
+@convert_app.command(name="gift-to-xml")
+def gift_to_xml_cmd(
+    path: Optional[str] = typer.Argument(None),
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo XML de salida (por defecto, stdout)."),
+):
     """Convierte GIFT a Moodle XML (PATH o stdin; '-' para stdin)."""
     contenido = _leer_entrada(Path(path) if path else None)
     try:
         resultado = gift_to_xml(contenido)
     except Exception as e:
-        raise click.ClickException(f"No se pudo convertir el GIFT: {e}")
+        fail(f"No se pudo convertir el GIFT: {e}")
     if output:
         Path(output).write_text(resultado, encoding="utf-8")
         click.echo(f"✓ XML generado: {output}")

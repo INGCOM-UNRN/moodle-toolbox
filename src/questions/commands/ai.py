@@ -1,21 +1,29 @@
-import click
 from pathlib import Path
-from questions.core.ai import load_config, run_global_ai_processing, get_model
-from questions.commands.common import llm_option
+from typing import List, Optional
 
-@click.command()
-@llm_option
-@click.argument('inputs', nargs=-1, type=click.Path(exists=True))
-@click.option('--mode', type=click.Choice(['improve', 'multiply', 'transform']), default='improve',
-              help='Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado).')
-@click.option('--prompt', help='Prompt personalizado o ruta a un archivo .txt con el prompt.')
-@click.option('--output', type=click.Path(), help='Directorio de salida (por defecto: output_<mode>).')
-@click.option('--model', help='Modelo de Gemini (default: configurado o gemini-2.0-flash).')
-@click.option('-r', '--recursive', is_flag=True, help='Procesar subdirectorios recursivamente.')
-@click.option('--batch-size', type=int, default=5, help='Número de preguntas por petición a la API (default: 5).')
-@click.option('-i', '--in-place', is_flag=True, help='Escribir en la misma carpeta que el original.')
-@click.option('--suffix', help='Sufijo para los nuevos archivos (usado con --in-place, ej: -ia).')
-def ai(inputs, mode, prompt, output, model, recursive, batch_size, in_place, suffix):
+import click
+import typer
+
+from questions.core.ai import load_config, run_global_ai_processing, get_model
+from questions.commands.common import LLM_OPTION
+
+
+def ai(
+    inputs: Optional[List[Path]] = typer.Argument(None, exists=True),
+    llm: bool = LLM_OPTION,
+    mode: str = typer.Option(
+        "improve", "--mode",
+        click_type=click.Choice(["improve", "multiply", "transform"]),
+        help="Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado).",
+    ),
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="Prompt personalizado o ruta a un archivo .txt con el prompt."),
+    output: Optional[Path] = typer.Option(None, "--output", help="Directorio de salida (por defecto: output_<mode>)."),
+    model: Optional[str] = typer.Option(None, "--model", help="Modelo de Gemini (default: configurado o gemini-2.0-flash)."),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar subdirectorios recursivamente."),
+    batch_size: int = typer.Option(5, "--batch-size", help="Número de preguntas por petición a la API (default: 5)."),
+    in_place: bool = typer.Option(False, "-i", "--in-place", help="Escribir en la misma carpeta que el original."),
+    suffix: Optional[str] = typer.Option(None, "--suffix", help="Sufijo para los nuevos archivos (usado con --in-place, ej: -ia)."),
+):
     """Procesamiento de preguntas usando IA (Gemini)."""
     if not inputs:
         click.echo("Error: Debes proporcionar al menos una ruta de entrada.", err=True)

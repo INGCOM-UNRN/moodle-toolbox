@@ -1,19 +1,24 @@
-import click
 from pathlib import Path
+from typing import List, Optional
+
+import click
+import typer
+
 from questions.core.formatter import format_gift_content, fix_code_indentation, convert_markdown_code_blocks, process_xml_cdata
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION
 
-@click.command()
-@llm_option
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-@click.option('-n', '--dry-run', is_flag=True, help='No aplicar cambios')
-@click.option('--code', is_flag=True, help='Ajustar indentación en bloques de código (```)')
-@click.option('--fullwidth', is_flag=True, help='Convertir caracteres de código a fullwidth')
-@click.option('--normal', is_flag=True, help='Convertir caracteres de código a normal (default)')
-@click.option('--correct-first', is_flag=True, help='Mueve la respuesta correcta al principio (solo MC).')
-def format_cmd(paths, recursive, dry_run, code, fullwidth, normal, correct_first):
+
+def format_cmd(
+    paths: Optional[List[Path]] = typer.Argument(None, exists=True),
+    llm: bool = LLM_OPTION,
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
+    code: bool = typer.Option(False, "--code", help="Ajustar indentación en bloques de código (```)"),
+    fullwidth: bool = typer.Option(False, "--fullwidth", help="Convertir caracteres de código a fullwidth"),
+    normal: bool = typer.Option(False, "--normal", help="Convertir caracteres de código a normal (default)"),
+    correct_first: bool = typer.Option(False, "--correct-first", help="Mueve la respuesta correcta al principio (solo MC)."),
+):
     """Formatea archivos GIFT y ajusta bloques de código."""
     if not paths:
         paths = ['.']

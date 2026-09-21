@@ -1,16 +1,17 @@
 import click
+import typer
 from pathlib import Path
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION, fail
 
 
-@click.command()
-@llm_option
-@click.argument("directorio", type=click.Path(exists=True, file_okay=False), default=".")
-@click.option("--host", default="127.0.0.1", show_default=True, help="Host del servidor web.")
-@click.option("--port", type=int, default=5000, show_default=True, help="Puerto del servidor web.")
-@click.option("--debug/--no-debug", default=False, help="Modo debug de Flask.")
-def ui(directorio, host, port, debug):
+def ui(
+    directorio: str = typer.Argument(".", exists=True, file_okay=False),
+    llm: bool = LLM_OPTION,
+    host: str = typer.Option("127.0.0.1", "--host", show_default=True, help="Host del servidor web."),
+    port: int = typer.Option(5000, "--port", show_default=True, help="Puerto del servidor web."),
+    debug: bool = typer.Option(False, "--debug/--no-debug", help="Modo debug de Flask."),
+):
     """Abre el editor web local (cerebro) sobre DIRECTORIO.
 
     Permite navegar y editar preguntas en Moodle XML y GIFT desde el navegador.
@@ -19,7 +20,7 @@ def ui(directorio, host, port, debug):
     try:
         from questions.ui.app import run
     except ImportError as e:
-        raise click.ClickException(
+        fail(
             f"Faltan dependencias del editor web ({e}). "
             "Instalalas con: uv tool install questions --extra ui  |  pip install flask markdown"
         )

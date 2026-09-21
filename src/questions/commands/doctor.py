@@ -4,11 +4,14 @@ import json
 import shutil
 import sys
 import click
+import typer
 
 
-@click.command("doctor")
-@click.option("--json", "json_output", is_flag=True, help="Emitir diagnóstico en formato JSON estructurado.")
-def doctor_cmd(json_output: bool):
+def doctor_cmd(
+    json_output: bool = typer.Option(
+        False, "--json", help="Emitir diagnóstico en formato JSON estructurado."
+    ),
+):
     """Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis)."""
     diagnostico = []
 

@@ -1,20 +1,25 @@
 import click
+import typer
 from pathlib import Path
+from typing import List, Optional
 from questions.core.formatter import fix_code_indentation, convert_markdown_code_blocks, process_xml_cdata
 from questions.core.naming import rename_to_slug, rename_from_title, set_question_title
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION
 
-@click.group()
-@llm_option
-def fix():
+fix_app = typer.Typer(help="Comandos para corregir problemas comunes.")
+
+
+@fix_app.callback()
+def fix(llm: bool = LLM_OPTION):
     """Comandos para corregir problemas comunes."""
-    pass
 
-@fix.command(name="slugify")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def slugify_cmd(paths, recursive):
+
+@fix_app.command(name="slugify")
+def slugify_cmd(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Slugifica los nombres de los archivos (minúsculas, sin espacios ni acentos)."""
     if not paths:
         paths = ['.']
@@ -37,10 +42,11 @@ def slugify_cmd(paths, recursive):
     
     click.echo(f"\nFinalizado: {modified_count} archivos renombrados.")
 
-@fix.command(name="name-from-title")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def name_from_title_cmd(paths, recursive):
+@fix_app.command(name="name-from-title")
+def name_from_title_cmd(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Renombra el archivo usando el título interno de la pregunta (slugificado)."""
     if not paths:
         paths = ['.']
@@ -63,10 +69,11 @@ def name_from_title_cmd(paths, recursive):
     
     click.echo(f"\nFinalizado: {modified_count} archivos renombrados.")
 
-@fix.command(name="title-from-name")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def title_from_name_cmd(paths, recursive):
+@fix_app.command(name="title-from-name")
+def title_from_name_cmd(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Actualiza el título interno de la pregunta usando el nombre del archivo (sanitizado)."""
     if not paths:
         paths = ['.']
@@ -90,10 +97,11 @@ def title_from_name_cmd(paths, recursive):
     
     click.echo(f"\nFinalizado: {modified_count} títulos actualizados.")
 
-@fix.command(name="code-indent")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-def code_indent(paths, recursive):
+@fix_app.command(name="code-indent")
+def code_indent(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+):
     """Corrige la indentación en bloques de código (```)."""
     if not paths:
         paths = ['.']
@@ -118,12 +126,13 @@ def code_indent(paths, recursive):
     
     click.echo(f"\nFinalizado: {modified_count} archivos modificados.")
 
-@fix.command(name="code-chars")
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-r', '--recursive', is_flag=True, help='Procesar recursivamente')
-@click.option('--to-normal', is_flag=True, default=True, help='Convertir a normal (default)')
-@click.option('--to-fullwidth', is_flag=True, help='Convertir a fullwidth')
-def code_chars(paths, recursive, to_normal, to_fullwidth):
+@fix_app.command(name="code-chars")
+def code_chars(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    to_normal: bool = typer.Option(True, "--to-normal", help="Convertir a normal (default)"),
+    to_fullwidth: bool = typer.Option(False, "--to-fullwidth", help="Convertir a fullwidth"),
+):
     """Corrige caracteres especiales en bloques de código."""
     if to_fullwidth:
         to_normal = False

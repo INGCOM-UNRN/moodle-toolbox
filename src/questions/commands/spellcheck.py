@@ -1,8 +1,11 @@
 import json
 from pathlib import Path
-import click
+from typing import List, Optional
 
-from questions.commands.common import llm_option
+import click
+import typer
+
+from questions.commands.common import LLM_OPTION
 from questions.core.languagetool_checker import (
     analizar_archivo_banco,
     aplicar_autofix_archivo_banco,
@@ -10,20 +13,20 @@ from questions.core.languagetool_checker import (
 )
 
 
-@click.command('spellcheck')
-@llm_option
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('--server', '-s', help='URL del servidor LanguageTool (por defecto http://localhost:8081 y API pública)')
-@click.option('--username', '-u', help='Usuario / email de LanguageTool Premium')
-@click.option('--api-key', '-k', help='API Key / Token de LanguageTool Premium')
-@click.option('--premium', is_flag=True, help='Forzar uso de la API LanguageTool Premium')
-@click.option('--lang', '-l', default='es-AR', help='Código de idioma (default: es-AR)')
-@click.option('--ignore-rules', help='Reglas a ignorar separadas por comas')
-@click.option('--ignore-words', help='Palabras a ignorar separadas por comas')
-@click.option('--fix', '-f', is_flag=True, help='Aplica correcciones ortográficas automáticas')
-@click.option('--md', '--output-md', 'output_md', type=click.Path(), help='Genera reporte Markdown')
-@click.option('--json', 'output_json', is_flag=True, help='Emite salida estructurada en formato JSON')
-def spellcheck(paths, server, username, api_key, premium, lang, ignore_rules, ignore_words, fix, output_md, output_json):
+def spellcheck(
+    paths: Optional[List[Path]] = typer.Argument(None, exists=True),
+    llm: bool = LLM_OPTION,
+    server: Optional[str] = typer.Option(None, "-s", "--server", help="URL del servidor LanguageTool (por defecto http://localhost:8081 y API pública)"),
+    username: Optional[str] = typer.Option(None, "-u", "--username", help="Usuario / email de LanguageTool Premium"),
+    api_key: Optional[str] = typer.Option(None, "-k", "--api-key", help="API Key / Token de LanguageTool Premium"),
+    premium: bool = typer.Option(False, "--premium", help="Forzar uso de la API LanguageTool Premium"),
+    lang: str = typer.Option("es-AR", "-l", "--lang", help="Código de idioma (default: es-AR)"),
+    ignore_rules: Optional[str] = typer.Option(None, "--ignore-rules", help="Reglas a ignorar separadas por comas"),
+    ignore_words: Optional[str] = typer.Option(None, "--ignore-words", help="Palabras a ignorar separadas por comas"),
+    fix: bool = typer.Option(False, "-f", "--fix", help="Aplica correcciones ortográficas automáticas"),
+    output_md: Optional[Path] = typer.Option(None, "--md", "--output-md", help="Genera reporte Markdown"),
+    output_json: bool = typer.Option(False, "--json", help="Emite salida estructurada en formato JSON"),
+):
     """Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool."""
     if not paths:
         paths = ['.']
@@ -69,7 +72,7 @@ def spellcheck(paths, server, username, api_key, premium, lang, ignore_rules, ig
         out_p.write_text(md_text, encoding='utf-8')
         click.echo(f"✓ Reporte Markdown generado en: {out_p}")
         if todos_los_issues:
-            raise click.exceptions.Exit(1)
+            raise typer.Exit(1)
         return
 
     if output_json:
@@ -81,7 +84,7 @@ def spellcheck(paths, server, username, api_key, premium, lang, ignore_rules, ig
         }
         click.echo(json.dumps(res, indent=2, ensure_ascii=False))
         if todos_los_issues:
-            raise click.exceptions.Exit(1)
+            raise typer.Exit(1)
         return
 
     if not todos_los_issues:
@@ -96,4 +99,4 @@ def spellcheck(paths, server, username, api_key, premium, lang, ignore_rules, ig
     if fix:
         click.echo(f"\n✓ Se aplicaron {total_arreglos} correcciones en los archivos.")
 
-    raise click.exceptions.Exit(1)
+    raise typer.Exit(1)

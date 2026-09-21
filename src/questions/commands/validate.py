@@ -1,19 +1,24 @@
-import click
 from pathlib import Path
+from typing import List, Optional
+
+import click
+import typer
+
 from questions.core.validator import GiftAnalyzer
 from questions.core.parser import parse_gift_file
 
-from questions.commands.common import llm_option
+from questions.commands.common import LLM_OPTION
 
-@click.command()
-@llm_option
-@click.argument('paths', nargs=-1, type=click.Path(exists=True))
-@click.option('-o', '--output', help='Archivo de salida para el informe')
-@click.option('-r', '--recursive', is_flag=True, help='Buscar recursivamente')
-@click.option('-v', '--verbose', is_flag=True, help='Información detallada')
-@click.option('-s', '--similarity', type=float, default=0.85, help='Threshold para duplicados')
-@click.option('-j', '--json', 'output_json', is_flag=True, help='Salida en JSON')
-def validate(paths, output, recursive, verbose, similarity, output_json):
+
+def validate(
+    paths: Optional[List[Path]] = typer.Argument(None, exists=True),
+    llm: bool = LLM_OPTION,
+    output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo de salida para el informe"),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente"),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="Información detallada"),
+    similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold para duplicados"),
+    output_json: bool = typer.Option(False, "-j", "--json", help="Salida en JSON"),
+):
     """Valida archivos o directorios de preguntas GIFT."""
     if not paths:
         paths = ['.']

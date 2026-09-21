@@ -1,7 +1,11 @@
 """Comando de auditoría de salud e higiene de bancos Moodle."""
 
 from pathlib import Path
+from typing import Optional
+
 import click
+import typer
+
 from questions.core.moodle_health import (
     verificar_porcentajes_opciones,
     auditar_retroalimentaciones,
@@ -11,11 +15,15 @@ from questions.core.moodle_health import (
 )
 
 
-@click.command("health")
-@click.argument("archivo", type=click.Path(exists=True, path_type=Path))
-@click.option("--md", "output_md", type=click.Path(path_type=Path), help="Exportar reporte en Markdown.")
-@click.option("--clean-html", is_flag=True, help="Limpiar etiquetas HTML obsoletas y estilos inline.")
-def health_cmd(archivo: Path, output_md: Path | None, clean_html: bool):
+def health_cmd(
+    archivo: Path = typer.Argument(..., exists=True),
+    output_md: Optional[Path] = typer.Option(
+        None, "--md", help="Exportar reporte en Markdown."
+    ),
+    clean_html: bool = typer.Option(
+        False, "--clean-html", help="Limpiar etiquetas HTML obsoletas y estilos inline."
+    ),
+):
     """Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas."""
     contenido = archivo.read_text(encoding="utf-8", errors="replace")
     es_xml = archivo.suffix.lower() == ".xml"
