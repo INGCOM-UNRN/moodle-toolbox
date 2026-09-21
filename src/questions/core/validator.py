@@ -6,14 +6,12 @@ Genera un informe detallado con estadísticas, problemas detectados y recomendac
 
 import argparse
 import json
-import math
-import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
-from questions.core.parser import parse_gift_file, get_question_summary
+
+from questions.core.parser import parse_gift_file
 from questions.core.validator_informe import InformeMixin
 from questions.core.validator_similitud import SimilitudMixin
 

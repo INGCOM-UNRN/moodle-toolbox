@@ -1,9 +1,8 @@
 """Modelo de datos GIFT: tipos de pregunta y estructuras."""
 
-import re
-import json
 from dataclasses import dataclass, field, asdict
-from typing import Optional, Any
+from typing import Optional
+
 from enum import Enum
 
 class QuestionType(Enum):

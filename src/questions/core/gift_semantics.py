@@ -1,10 +1,10 @@
 """Acciones semánticas y utilidades de llaves del parser GIFT."""
 
 import re
-from typing import Optional, Any
 
-from questions.core.gift_model import *  # noqa: F401,F403
-from questions.core.gift_model import FormattedText, Choice, MatchPair, NumericalAnswer, Question, QuestionType
+from questions.core.gift_model import FormattedText
+
+
 
 
 def _llaves_balanceadas(texto: str) -> bool:

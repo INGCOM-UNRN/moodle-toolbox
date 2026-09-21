@@ -1,6 +1,6 @@
 import pytest
 
-flask = pytest.importorskip("flask")
+flask = pytest.importorskip("flask", reason="editor web: requiere el extra opcional 'ui' (pip install questions[ui])")
 
 from questions.ui.app import create_app  # noqa: E402
 
