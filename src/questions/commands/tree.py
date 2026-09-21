@@ -1,10 +1,13 @@
+import contextlib
+import io
+
 import click
 import typer
 from pathlib import Path
 from typing import Optional
 
 from questions.core import tree as core_tree
-from questions.commands.common import LLM_OPTION, fail
+from questions.commands.common import LLM_OPTION, emitir_json, fail
 
 tree_app = typer.Typer(help="Organiza bancos en árboles de directorios por categoría.")
 
@@ -29,11 +32,16 @@ def export_cmd(
         None, "--formato",
         click_type=click.Choice(["gift", "xml"]),
         help="Forzar el formato (por defecto se deduce de la extensión)."),
+    output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
 ):
     """Exporta ARCHIVO (banco monolítico) a un árbol de directorios."""
-    cantidad = core_tree.exportar(archivo, dir_salida, formato)
+    with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
+        cantidad = core_tree.exportar(archivo, dir_salida, formato)
     if cantidad < 0:
         fail("La exportación falló.")
+    if output_json:
+        emitir_json("tree export", {"preguntas": cantidad, "directorio": str(dir_salida)})
+        return
     click.echo(f"\nÁrbol generado en: {dir_salida}")
 
 
@@ -47,9 +55,13 @@ def collect_cmd(
         None, "--formato",
         click_type=click.Choice(["gift", "xml"]),
         help="Forzar el formato (por defecto se deduce de la extensión de salida)."),
+    output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
 ):
     """Recolecta DIRECTORIO en un banco monolítico único."""
-    cantidad = core_tree.recolectar(directorio, archivo_salida, formato)
+    with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
+        cantidad = core_tree.recolectar(directorio, archivo_salida, formato)
     if cantidad == 0:
         click.echo("No se recolectó ninguna pregunta.", err=True)
         raise typer.Exit(code=1)
+    if output_json:
+        emitir_json("tree collect", {"preguntas": cantidad, "archivo": str(archivo_salida)})

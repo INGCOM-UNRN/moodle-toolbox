@@ -6,6 +6,8 @@ from typing import Optional
 import click
 import typer
 
+from questions.commands.common import emitir_json
+
 from questions.core.moodle_health import (
     verificar_porcentajes_opciones,
     auditar_retroalimentaciones,
@@ -23,6 +25,7 @@ def health_cmd(
     clean_html: bool = typer.Option(
         False, "--clean-html", help="Limpiar etiquetas HTML obsoletas y estilos inline."
     ),
+    output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
     """Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas."""
     contenido = archivo.read_text(encoding="utf-8", errors="replace")
@@ -33,6 +36,15 @@ def health_cmd(
         archivo.write_text(limpio, encoding="utf-8")
         click.echo(f"✓ Archivo limpio de etiquetas obsoletas y estilos CSS inline: {archivo}")
         contenido = limpio
+
+    if output_json:
+        datos = {"archivo": str(archivo), "formato": "xml" if es_xml else "gift"}
+        if not es_xml:
+            datos["porcentajes"] = verificar_porcentajes_opciones(contenido)
+            datos["retroalimentacion"] = auditar_retroalimentaciones(contenido)
+            datos["enlaces"] = auditar_enlaces_y_multimedia(contenido)
+        emitir_json("health", datos)
+        return
 
     reporte = generar_reporte_salud_markdown(archivo, contenido, es_xml=es_xml)
 

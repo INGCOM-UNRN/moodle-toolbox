@@ -6,7 +6,10 @@ import typer
 
 from questions.core.validator import GiftAnalyzer
 
-from questions.commands.common import LLM_OPTION
+import contextlib
+import io
+
+from questions.commands.common import LLM_OPTION, emitir_json
 
 analyze_app = typer.Typer(help="Análisis y estadísticas de preguntas.")
 
@@ -21,20 +24,25 @@ def stats(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente"),
     output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo de salida para el informe"),
+    output_json: bool = typer.Option(False, "--json", help="Emite las estadísticas como JSON versionado"),
 ):
     """Genera estadísticas de un directorio de preguntas."""
     if not paths:
         paths = ['.']
         
     analyzer = GiftAnalyzer(recursive=recursive)
-    for p in paths:
-        path_obj = Path(p)
-        if path_obj.is_dir():
-            analyzer.scan_directory(str(path_obj))
-        else:
-            analyzer.analyze_file(path_obj)
-            
-    analyzer.find_duplicates()
+    with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
+        for p in paths:
+            path_obj = Path(p)
+            if path_obj.is_dir():
+                analyzer.scan_directory(str(path_obj))
+            else:
+                analyzer.analyze_file(path_obj)
+
+        analyzer.find_duplicates()
+    if output_json:
+        emitir_json("analyze stats", analyzer.to_json())
+        return
     report = analyzer.generate_report(output)
     if not output:
         click.echo(report)
@@ -44,21 +52,27 @@ def similar(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente"),
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold de similitud"),
+    output_json: bool = typer.Option(False, "--json", help="Emite los pares similares como JSON versionado"),
 ):
     """Encuentra preguntas similares en un directorio."""
     if not paths:
         paths = ['.']
         
     analyzer = GiftAnalyzer(similarity_threshold=similarity, recursive=recursive)
-    for p in paths:
-        path_obj = Path(p)
-        if path_obj.is_dir():
-            analyzer.scan_directory(str(path_obj))
-        else:
-            analyzer.analyze_file(path_obj)
-            
-    analyzer.find_duplicates()
-    
+    with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
+        for p in paths:
+            path_obj = Path(p)
+            if path_obj.is_dir():
+                analyzer.scan_directory(str(path_obj))
+            else:
+                analyzer.analyze_file(path_obj)
+
+        analyzer.find_duplicates()
+
+    if output_json:
+        emitir_json("analyze similar", {"umbral": similarity, "pares": analyzer.to_json()["duplicates"]})
+        return
+
     if analyzer.duplicates:
         click.echo(f"Se encontraron {len(analyzer.duplicates)} pares de preguntas similares:")
         for dup in analyzer.duplicates:

@@ -3,7 +3,7 @@ import typer
 from pathlib import Path
 from typing import Optional
 
-from questions.commands.common import LLM_OPTION, fail
+from questions.commands.common import LLM_OPTION, emitir_json, fail
 
 
 def synth(
@@ -17,6 +17,7 @@ def synth(
         None, "-o", "--output",
         help="Archivo destino: .gift o .xml según la extensión."),
     listar: bool = typer.Option(False, "--listar", help="Lista las plantillas disponibles y sale."),
+    output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
 ):
     """daedalus en belmont: sintetiza preguntas de C verificadas con GCC.
 
@@ -34,6 +35,9 @@ def synth(
     if listar or not plantilla:
         if not listar and not archivo_salida:
             fail("Indicá la plantilla. Ver opciones con --listar.")
+        if output_json:
+            emitir_json("synth", {"plantillas": dict(sorted(plantillas_disponibles().items()))})
+            return
         click.echo("Plantillas disponibles del sintetizador daedalus:")
         for nombre, descripcion in sorted(plantillas_disponibles().items()):
             click.echo(f"  - {nombre}: {descripcion}")
@@ -59,5 +63,9 @@ def synth(
 
     archivo_salida.parent.mkdir(parents=True, exist_ok=True)
     archivo_salida.write_text(contenido, encoding="utf-8")
+    if output_json:
+        emitir_json("synth", {"plantilla": plantilla, "cantidad": len(snippets),
+                              "semilla": semilla, "salida": str(archivo_salida)})
+        return
     click.echo(f"✓ {len(snippets)} preguntas de C sintetizadas y verificadas con gcc "
                f"→ {archivo_salida}")
