@@ -5,6 +5,11 @@ from typing import Optional
 
 from enum import Enum
 
+# Versión del contrato de datos GIFT que consumen otras herramientas (scorm-tools
+# `from-gift`). Subir la mayor si cambia la forma del dict de `parse_gift`.
+GIFT_CONTRACT_VERSION = "1.0.0"
+
+
 class QuestionType(Enum):
     CATEGORY = "Category"
     DESCRIPTION = "Description"
