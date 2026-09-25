@@ -32,14 +32,35 @@ def llm_callback(ctx, param, value):
 
 
 app = typer.Typer(
+    context_settings={"help_option_names": ["-h", "--help"]},
     help="Herramientas para la gestión de preguntas de Moodle.",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
 
 
+def _mostrar_version(valor: bool) -> None:
+    if valor:
+        from importlib.metadata import PackageNotFoundError, version
+
+        try:
+            numero = version("questions")
+        except PackageNotFoundError:
+            numero = "desconocida"
+        typer.echo(f"moodle-toolbox {numero}")
+        raise typer.Exit(code=0)
+
+
 @app.callback()
 def main_callback(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-v",
+        callback=_mostrar_version,
+        is_eager=True,
+        help="Muestra la versión de moodle-toolbox y termina.",
+    ),
     llm: bool = typer.Option(
         False,
         "--llm",
