@@ -19,10 +19,14 @@ def test_ui_figura_entre_los_comandos():
 
 
 def test_ui_aparece_en_la_ayuda_y_tiene_la_suya(tmp_path):
-    assert "ui" in runner.invoke(cli, ["--help"]).output.split()
+    import re
+    clean_help = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", runner.invoke(cli, ["--help"]).output)
+    assert "ui" in clean_help.split()
     res = runner.invoke(cli, ["ui", "--help"])
     assert res.exit_code == 0
-    assert "--port" in res.output and "--host" in res.output
+    clean_ui = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", res.output)
+    assert "--port" in clean_ui and "--host" in clean_ui
+
 
 
 def test_sin_flask_el_error_indica_como_instalar_las_dependencias(tmp_path, monkeypatch):

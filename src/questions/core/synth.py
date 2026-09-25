@@ -33,14 +33,20 @@ except ImportError:
         SnippetGenerado = None  # type: ignore
         compilar_y_ejecutar = None  # type: ignore
         PLANTILLAS = {}  # type: ignore
-        def plantillas_disponibles() -> list[str]:  # type: ignore
-            return ["precedencia", "traza-punteros", "recursion", "incrementos"]
+        def plantillas_disponibles() -> dict[str, str]:  # type: ignore
+            return {
+                "precedencia": "Precedencia de operadores",
+                "traza-punteros": "Traza de punteros",
+                "recursion": "Recursión",
+                "incrementos": "Incrementos",
+            }
         def sintetizar(*args, **kwargs):  # type: ignore
-            return []
+            raise RuntimeError("generador_examenes (alucarD) no está instalado para sintetizar preguntas")
         def exportar_gift(*args, **kwargs) -> str:  # type: ignore
             return ""
         def _exportar_xml_base(*args, **kwargs) -> str:  # type: ignore
             return ""
+
 
 
 

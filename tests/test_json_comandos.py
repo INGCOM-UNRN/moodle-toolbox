@@ -2,8 +2,10 @@
 
 import json
 import shutil
+import importlib.util
 
 import pytest
+
 from click.testing import CliRunner
 
 from questions.cli import cli
@@ -57,8 +59,12 @@ def test_synth_listar_json():
     assert "precedencia" in datos["plantillas"]
 
 
-@pytest.mark.skipif(shutil.which("gcc") is None, reason="Requiere gcc en PATH")
+@pytest.mark.skipif(
+    shutil.which("gcc") is None or importlib.util.find_spec("generador_examenes") is None,
+    reason="Requiere gcc y generador_examenes (alucarD)"
+)
 def test_synth_generar_json(tmp_path):
     salida = tmp_path / "b.gift"
     datos = _json(runner.invoke(cli, ["synth", "precedencia", "-n", "1", "-o", str(salida), "--json"]))
     assert datos["cantidad"] == 1 and salida.exists()
+
