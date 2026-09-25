@@ -239,7 +239,7 @@ questions synth
 Abre el editor web local (cerebro) sobre DIRECTORIO.
 
     Permite navegar y editar preguntas en Moodle XML y GIFT desde el navegador.
-    Requiere el extra 'ui': pip install questions[ui]
+    Requiere el extra 'ui': uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |

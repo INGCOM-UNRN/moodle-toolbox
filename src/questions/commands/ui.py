@@ -15,13 +15,14 @@ def ui(
     """Abre el editor web local (cerebro) sobre DIRECTORIO.
 
     Permite navegar y editar preguntas en Moodle XML y GIFT desde el navegador.
-    Requiere el extra 'ui': pip install questions[ui]
+    Requiere el extra 'ui': uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
     """
     try:
         from questions.ui.app import run
     except ImportError as e:
         fail(
             f"Faltan dependencias del editor web ({e}). "
-            "Instalalas con: uv tool install questions --extra ui  |  pip install flask markdown"
+            'Instalalas con: uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"'
+            "  (en un entorno de desarrollo: uv sync --extra ui)"
         )
     run(str(Path(directorio).resolve()), host=host, port=port, debug=debug)

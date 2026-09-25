@@ -53,10 +53,21 @@ debe coordinarse con scorm-tools.
 ## 🚀 Instalación y Uso
 
 Este proyecto utiliza [uv](https://docs.astral.sh/uv/) para la gestión de dependencias y ejecución.
+Se instala siempre desde el repositorio: el nombre `questions` en PyPI pertenece a
+otro proyecto, así que instalarlo por nombre traería un paquete ajeno.
+
+```bash
+# Instalación como herramienta (comandos `questions` y `moodle-toolbox`)
+uv tool install git+https://github.com/INGCOM-UNRN/moodle-toolbox
+# con el editor web opcional (`questions ui`)
+uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
+```
+
+Para desarrollo:
 
 ```bash
 # Clonar el repositorio
-git clone <repository-url>
+git clone https://github.com/INGCOM-UNRN/moodle-toolbox.git
 cd moodle-toolbox
 
 # Ejecutar la ayuda principal
@@ -90,7 +101,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions tree collect dir/ -o reconstruido.gift|xml`: Recolecta el árbol nuevamente a un archivo único, restaurando las categorías.
 
 ### 5. Editor Web (absorbe moodle-visor / mxviz)
-- `questions ui [dir]`: Abre un editor web local para navegar y editar preguntas organizadas en directorios, con soporte nativo de **Moodle XML y GIFT**. Requiere el extra opcional: `pip install questions[ui]`.
+- `questions ui [dir]`: Abre un editor web local para navegar y editar preguntas organizadas en directorios, con soporte nativo de **Moodle XML y GIFT**. Requiere el extra opcional: `uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"`.
 
 ### 6. Mantenimiento XML
 - `questions xml cdata`: Asegura que los bloques `<text>` usen secciones CDATA.
