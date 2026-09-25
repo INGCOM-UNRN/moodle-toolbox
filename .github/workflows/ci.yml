@@ -27,6 +27,8 @@ jobs:
         run: |
           uv sync --all-extras
           uv pip install "git+https://github.com/martinvilu/mystmd-tools.git"
+          uv pip install "git+https://github.com/INGCOM-UNRN/alucarD.git"
+
 
       - name: Ejecutar suite de pruebas
         run: uv run pytest -q
