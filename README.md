@@ -1,5 +1,7 @@
 # Moodle Toolbox (Questions CLI)
 
+> 📖 **Manual de Usuario:** Para una guía exhaustiva de comandos, banderas, arquitectura y ejemplos, consultá el [Manual de Uso](MANUAL.md).
+
 Conjunto de herramientas unificadas en Python para gestionar preguntas de Moodle en formatos XML y GIFT. Facilita la conversión, análisis, limpieza, mantenimiento y generación de preguntas mediante IA.
 
 Todas las herramientas anteriores han sido consolidadas en un único comando raíz: `questions`.
