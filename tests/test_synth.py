@@ -13,7 +13,12 @@ from questions.core.synth import (
     exportar_xml,
 )
 
+import importlib.util
+if importlib.util.find_spec("generador_examenes") is None:
+    pytest.skip("generador_examenes (alucarD) no está disponible en el entorno", allow_module_level=True)
+
 runner = CliRunner()
+
 
 
 def test_plantillas_disponibles():
