@@ -32,7 +32,7 @@ Todas las herramientas anteriores han sido consolidadas en un único comando ra�
 ### Dependencias Externas y Binarios
 - Para los comandos de gestión de bancos (conversión, validación, limpieza): ninguna.
 - `synth`: `gcc` (compila y ejecuta los snippets para verificar su salida) y el paquete `alucarD`, que aporta el motor de síntesis.
-- `ai`: una `GEMINI_API_KEY` (se guarda con el comando `config`).
+- `ai`: el extra opcional `ai` (`uv tool install "questions[ai] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"`) y una `GEMINI_API_KEY` (se guarda con el comando `config`).
 - LanguageTool (local o API remota) para la revisión ortográfica opcional.
 - `moodle-toolbox doctor` informa cuáles de estos requisitos están presentes.
 

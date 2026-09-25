@@ -17,7 +17,10 @@ from questions.core.config import get_api_key, get_model
 def load_config():
     """Load configuration and return GenAI Client."""
     if genai is None:
-        raise ImportError("El paquete 'google-genai' no está instalado. Instálalo con 'pip install google-genai'.")
+        raise ImportError(
+            "El paquete 'google-genai' no está instalado: `questions ai` requiere el extra opcional 'ai'. "
+            'Instalalo con: uv tool install "questions[ai] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"'
+        )
     api_key = get_api_key()
     if not api_key:
         raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")

@@ -28,7 +28,6 @@ dependencies = [
     "python-dotenv",
     "typer>=0.12.0",
     "click>=8.0.0",
-    "google-genai>=2.4.0",
     "rich>=13.0,<14.0",
 ]
 
@@ -42,6 +41,11 @@ Repository = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox.git"
 Issues = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox/issues"
 
 [project.optional-dependencies]
+# `questions ai` (Gemini). Es opcional: google-genai arrastra muchas
+# dependencias (cryptography, urllib3, pyasn1, …) que el resto del CLI no usa.
+ai = [
+    "google-genai>=2.4.0",
+]
 ui = [
     "flask>=3.0",
     "markdown",
