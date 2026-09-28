@@ -51,6 +51,11 @@ ui = [
     "markdown",
 ]
 
+# Revisión ortográfica con LanguageTool (delegada en myst-tools).
+languagetool = [
+    "myst-tools @ git+https://github.com/martinvilu/mystmd-tools@a55f7db83b03aa1da9485b3cf70c49b71ece2664",
+]
+
 [tool.uv]
 package = true
 
@@ -73,3 +78,7 @@ testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["questions"]
+
+[tool.hatch.metadata]
+# Las dependencias del ecosistema son referencias directas a git (nunca por nombre en PyPI).
+allow-direct-references = true

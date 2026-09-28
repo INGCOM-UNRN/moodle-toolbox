@@ -5,12 +5,7 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.commands.common import LLM_OPTION
-from questions.core.languagetool_checker import (
-    analizar_archivo_banco,
-    aplicar_autofix_archivo_banco,
-    generar_reporte_markdown_languagetool,
-)
+from questions.commands.common import LLM_OPTION, fail
 
 
 def spellcheck(
@@ -28,6 +23,15 @@ def spellcheck(
     output_json: bool = typer.Option(False, "--json", help="Emite salida estructurada en formato JSON"),
 ):
     """Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool."""
+    # Import diferido: sin el extra `languagetool` el resto del CLI funciona (N-MOODLE-01).
+    try:
+        from questions.core.languagetool_checker import (
+            analizar_archivo_banco,
+            aplicar_autofix_archivo_banco,
+            generar_reporte_markdown_languagetool,
+        )
+    except ModuleNotFoundError as error:
+        fail(str(error))
     if not paths:
         paths = ['.']
 

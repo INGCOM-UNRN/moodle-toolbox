@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 try:
     from generador_examenes.synthesizer.engine import (
         SnippetGenerado,
@@ -15,39 +12,28 @@ try:
         exportar_gift,
         exportar_xml as _exportar_xml_base,
     )
-except ImportError:
-    sibling = Path(__file__).resolve().parents[4] / "alucarD"
-    if sibling.is_dir() and str(sibling) not in sys.path:
-        sys.path.insert(0, str(sibling))
-    try:
-        from generador_examenes.synthesizer.engine import (
-            SnippetGenerado,
-            compilar_y_ejecutar,
-            PLANTILLAS,
-            plantillas_disponibles,
-            sintetizar,
-            exportar_gift,
-            exportar_xml as _exportar_xml_base,
+except ImportError:  # sin alucarD (generador-examenes): la síntesis no está disponible
+    SnippetGenerado = None  # type: ignore
+    compilar_y_ejecutar = None  # type: ignore
+    PLANTILLAS = {}  # type: ignore
+    def plantillas_disponibles() -> dict[str, str]:  # type: ignore
+        return {
+            "precedencia": "Precedencia de operadores",
+            "traza-punteros": "Traza de punteros",
+            "recursion": "Recursión",
+            "incrementos": "Incrementos",
+        }
+    def sintetizar(*args, **kwargs):  # type: ignore
+        raise RuntimeError(
+            "la síntesis de preguntas usa alucarD (generador-examenes), que no está instalado. "
+            "Sumalo al entorno de moodle-toolbox: uv tool install --with "
+            "\"generador-examenes @ git+https://github.com/INGCOM-UNRN/alucarD\" "
+            "\"questions @ git+https://github.com/INGCOM-UNRN/moodle-toolbox\""
         )
-    except ImportError:
-        SnippetGenerado = None  # type: ignore
-        compilar_y_ejecutar = None  # type: ignore
-        PLANTILLAS = {}  # type: ignore
-        def plantillas_disponibles() -> dict[str, str]:  # type: ignore
-            return {
-                "precedencia": "Precedencia de operadores",
-                "traza-punteros": "Traza de punteros",
-                "recursion": "Recursión",
-                "incrementos": "Incrementos",
-            }
-        def sintetizar(*args, **kwargs):  # type: ignore
-            raise RuntimeError("generador_examenes (alucarD) no está instalado para sintetizar preguntas")
-        def exportar_gift(*args, **kwargs) -> str:  # type: ignore
-            return ""
-        def _exportar_xml_base(*args, **kwargs) -> str:  # type: ignore
-            return ""
-
-
+    def exportar_gift(*args, **kwargs) -> str:  # type: ignore
+        return ""
+    def _exportar_xml_base(*args, **kwargs) -> str:  # type: ignore
+        return ""
 
 
 def exportar_xml(snippets: list[SnippetGenerado]) -> str:

@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
-from questions.cli import cli
+# myst-tools llega con el extra `languagetool` (uv sync --extra languagetool).
+pytest.importorskip("myst_tools", reason="requiere el extra languagetool (myst-tools)")
+
+from questions.cli import cli  # noqa: E402
 from questions.core.languagetool_checker import (
     enmascarar_gift_xml,
     consultar_languagetool,

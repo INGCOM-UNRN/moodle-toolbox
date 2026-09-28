@@ -658,6 +658,15 @@ wheels = [
 ]
 
 [[package]]
+name = "myst-tools"
+version = "0.2.0"
+source = { git = "https://github.com/martinvilu/mystmd-tools?rev=a55f7db83b03aa1da9485b3cf70c49b71ece2664#a55f7db83b03aa1da9485b3cf70c49b71ece2664" }
+dependencies = [
+    { name = "rich" },
+    { name = "typer" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -880,6 +889,9 @@ dependencies = [
 ai = [
     { name = "google-genai" },
 ]
+languagetool = [
+    { name = "myst-tools" },
+]
 ui = [
     { name = "flask" },
     { name = "markdown" },
@@ -897,11 +909,12 @@ requires-dist = [
     { name = "flask", marker = "extra == 'ui'", specifier = ">=3.0" },
     { name = "google-genai", marker = "extra == 'ai'", specifier = ">=2.4.0" },
     { name = "markdown", marker = "extra == 'ui'" },
+    { name = "myst-tools", marker = "extra == 'languagetool'", git = "https://github.com/martinvilu/mystmd-tools?rev=a55f7db83b03aa1da9485b3cf70c49b71ece2664" },
     { name = "python-dotenv" },
     { name = "rich", specifier = ">=13.0,<14.0" },
     { name = "typer", specifier = ">=0.12.0" },
 ]
-provides-extras = ["ai", "ui"]
+provides-extras = ["ai", "ui", "languagetool"]
 
 [package.metadata.requires-dev]
 dev = [
