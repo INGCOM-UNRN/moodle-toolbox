@@ -5,7 +5,7 @@ Guía rápida de navegación para todos los archivos del proyecto.
 ## 🎯 Inicio Rápido
 
 **Nuevo usuario?** Empieza aquí:
-1. Lee [README.md](README.md) - Visión general del proyecto
+1. Lee README.md - Visión general del proyecto
 2. Identifica qué tipo de tarea necesitas realizar
 3. Ve a la sección correspondiente más abajo
 
@@ -47,11 +47,11 @@ moodle_toolbox/
 
 | Desde | Hasta | Script | Documentación |
 |-------|-------|--------|---------------|
-| XML | GIFT | [convert_xml_gift.py](convert_xml_gift.py) | [README_convert_xml_gift.md](README_convert_xml_gift.md) |
-| GIFT | XML | [convert_xml_gift.py](convert_xml_gift.py) | [README_convert_xml_gift.md](README_convert_xml_gift.md) |
-| HTML | Markdown | [convert_xml_html_to_markdown.py](convert_xml_html_to_markdown.py) | [README_html_to_markdown.md](README_html_to_markdown.md) |
-| HTML fullwidth | Markdown | [convert_html_to_markdown.py](convert_html_to_markdown.py) | [README_html_to_markdown.md](README_html_to_markdown.md) |
-| Chars normales | Fullwidth | [convert_code_blocks_chars.py](convert_code_blocks_chars.py) | [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md) |
+| XML | GIFT | convert_xml_gift.py | README_convert_xml_gift.md |
+| GIFT | XML | convert_xml_gift.py | README_convert_xml_gift.md |
+| HTML | Markdown | convert_xml_html_to_markdown.py | README_html_to_markdown.md |
+| HTML fullwidth | Markdown | convert_html_to_markdown.py | README_html_to_markdown.md |
+| Chars normales | Fullwidth | convert_code_blocks_chars.py | README_convert_code_blocks_chars_fix.md |
 
 ### Quiero analizar mi banco de preguntas
 
@@ -60,18 +60,18 @@ Nota: Estas herramientas están pensadas para trabajar con repositorios en las q
 
 | Objetivo | Script | Documentación |
 |----------|--------|---------------|
-| Encontrar duplicados en 1 archivo | [find_similar_questions.py](find_similar_questions.py) | [README_scripts.md](README_scripts.md#1-find_similar_questionspy) |
-| Evaluar directorio completo | [evaluate_questions_directory.py](evaluate_questions_directory.py) | [README_scripts.md](README_scripts.md#2-evaluate_questions_directorypy) |
-| Ver estadísticas por tipo | [evaluate_questions_directory.py](evaluate_questions_directory.py) | [README_scripts.md](README_scripts.md#2-evaluate_questions_directorypy) |
-| Obtener comandos para resolver duplicados | [evaluate_questions_directory.py](evaluate_questions_directory.py) | [README_scripts.md](README_scripts.md#resolución-de-duplicados-con-meld) |
+| Encontrar duplicados en 1 archivo | find_similar_questions.py | README_scripts.md |
+| Evaluar directorio completo | evaluate_questions_directory.py | README_scripts.md |
+| Ver estadísticas por tipo | evaluate_questions_directory.py | README_scripts.md |
+| Obtener comandos para resolver duplicados | evaluate_questions_directory.py | README_scripts.md |
 
 ### Quiero limpiar/mantener archivos XML
 
 | Objetivo | Script | Documentación |
 |----------|--------|---------------|
-| Asegurar CDATA en bloques | [ensure_cdata_in_text_blocks.py](ensure_cdata_in_text_blocks.py) | [README_xml_maintenance.md](README_xml_maintenance.md#ensure_cdata_in_text_blockspy) |
-| Eliminar tags | [remove_tags_from_xml.py](remove_tags_from_xml.py) | [README_xml_maintenance.md](README_xml_maintenance.md#remove_tags_from_xmlpy) |
-| Renombrar por nombre de pregunta | [rename_xml_files_by_question_name.py](rename_xml_files_by_question_name.py) | [README_xml_maintenance.md](README_xml_maintenance.md#rename_xml_files_by_question_namepy) |
+| Asegurar CDATA en bloques | ensure_cdata_in_text_blocks.py | [README_xml_maintenance.md](README_xml_maintenance.md#ensure_cdata_in_text_blockspy) |
+| Eliminar tags | remove_tags_from_xml.py | [README_xml_maintenance.md](README_xml_maintenance.md#remove_tags_from_xmlpy) |
+| Renombrar por nombre de pregunta | rename_xml_files_by_question_name.py | [README_xml_maintenance.md](README_xml_maintenance.md#rename_xml_files_by_question_namepy) |
 
 ## 📖 Documentación por Script
 
@@ -79,25 +79,25 @@ Nota: Estas herramientas están pensadas para trabajar con repositorios en las q
 
 #### convert_xml_gift.py
 - **Función:** Conversión bidireccional XML ↔ GIFT
-- **Doc completa:** [README_convert_xml_gift.md](README_convert_xml_gift.md)
+- **Doc completa:** README_convert_xml_gift.md
 - **Casos de uso:** Editar preguntas en formato GIFT (más simple), conversión masiva
 - **Características:** Preserva estructura de directorios, tags, feedback
 
 #### convert_code_blocks_chars.py
 - **Función:** Convierte caracteres especiales en bloques de código
-- **Doc completa:** [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md)
+- **Doc completa:** README_convert_code_blocks_chars_fix.md
 - **Casos de uso:** Escapar caracteres GIFT (`{`, `}`, `=`, `#`)
 - **Características:** Bidireccional, solo procesa código, no corrompe XML
 
 #### convert_html_to_markdown.py
 - **Función:** Convierte HTML fullwidth a Markdown
-- **Doc completa:** [README_html_to_markdown.md](README_html_to_markdown.md)
+- **Doc completa:** README_html_to_markdown.md
 - **Casos de uso:** Archivos con ＜code＞ fullwidth
 - **Características:** Cambia format="html" a format="markdown"
 
 #### convert_xml_html_to_markdown.py
 - **Función:** Convierte HTML normal a Markdown (RECOMENDADO)
-- **Doc completa:** [README_html_to_markdown.md](README_html_to_markdown.md)
+- **Doc completa:** README_html_to_markdown.md
 - **Casos de uso:** Archivos con `<code>` HTML estándar
 - **Características:** Procesa CDATA, preserva estructura
 
@@ -105,13 +105,13 @@ Nota: Estas herramientas están pensadas para trabajar con repositorios en las q
 
 #### find_similar_questions.py
 - **Función:** Encuentra preguntas similares/duplicadas
-- **Doc completa:** [README_scripts.md](README_scripts.md)
+- **Doc completa:** README_scripts.md
 - **Casos de uso:** Detección de duplicados, análisis de similitud
 - **Características:** Threshold ajustable, TF-IDF, modo verbose
 
 #### evaluate_questions_directory.py
 - **Función:** Evaluación exhaustiva de bancos de preguntas
-- **Doc completa:** [README_scripts.md](README_scripts.md)
+- **Doc completa:** README_scripts.md
 - **Casos de uso:** Auditoría de calidad, detección de problemas
 - **Características:** Estadísticas, duplicados, comandos Meld, recomendaciones
 
@@ -153,7 +153,7 @@ vim preguntas.gift
 ./convert_code_blocks_chars.py -f preguntas.xml --to-fullwidth
 ```
 
-**Documentación:** [README.md - Flujo de Trabajo](README.md#creación-de-banco-de-preguntas)
+**Documentación:** README.md - Flujo de Trabajo
 
 ### 2. Limpiar Banco Existente
 
@@ -168,7 +168,7 @@ grep "^meld" informe.txt | bash
 ./rename_xml_files_by_question_name.py -d ./banco
 ```
 
-**Documentación:** [README.md - Mantenimiento](README.md#mantenimiento-de-banco-existente)
+**Documentación:** README.md - Mantenimiento
 
 ### 3. Convertir HTML a Markdown
 
@@ -183,7 +183,7 @@ python3 convert_xml_html_to_markdown.py -d ./preguntas
 ./evaluate_questions_directory.py ./preguntas
 ```
 
-**Documentación:** [README_html_to_markdown.md - Flujo](README_html_to_markdown.md#flujo-de-trabajo-completo)
+**Documentación:** README_html_to_markdown.md - Flujo
 
 ### 4. Migración XML → GIFT → XML
 
@@ -201,32 +201,32 @@ vim ./gift/**/*.gift
 ./evaluate_questions_directory.py ./xml_nuevo -o informe.txt
 ```
 
-**Documentación:** [README.md - Conversión Masiva](README.md#conversión-masiva-xml--gift--xml)
+**Documentación:** README.md - Conversión Masiva
 
 ## 🔍 Búsqueda Rápida
 
 ### Por Palabra Clave
 
-- **XML**: [convert_xml_gift.py](convert_xml_gift.py), [ensure_cdata_in_text_blocks.py](ensure_cdata_in_text_blocks.py), [remove_tags_from_xml.py](remove_tags_from_xml.py)
-- **GIFT**: [convert_xml_gift.py](convert_xml_gift.py), [README_convert_xml_gift.md](README_convert_xml_gift.md)
-- **HTML**: [convert_html_to_markdown.py](convert_html_to_markdown.py), [convert_xml_html_to_markdown.py](convert_xml_html_to_markdown.py)
-- **Markdown**: [convert_html_to_markdown.py](convert_html_to_markdown.py), [convert_xml_html_to_markdown.py](convert_xml_html_to_markdown.py)
-- **Duplicados**: [find_similar_questions.py](find_similar_questions.py), [evaluate_questions_directory.py](evaluate_questions_directory.py)
-- **Análisis**: [find_similar_questions.py](find_similar_questions.py), [evaluate_questions_directory.py](evaluate_questions_directory.py)
-- **Caracteres especiales**: [convert_code_blocks_chars.py](convert_code_blocks_chars.py), [caracteres_especiales.md](caracteres_especiales.md)
-- **CDATA**: [ensure_cdata_in_text_blocks.py](ensure_cdata_in_text_blocks.py)
-- **Tags**: [remove_tags_from_xml.py](remove_tags_from_xml.py)
-- **Renombrar**: [rename_xml_files_by_question_name.py](rename_xml_files_by_question_name.py)
+- **XML**: convert_xml_gift.py, ensure_cdata_in_text_blocks.py, remove_tags_from_xml.py
+- **GIFT**: convert_xml_gift.py, README_convert_xml_gift.md
+- **HTML**: convert_html_to_markdown.py, convert_xml_html_to_markdown.py
+- **Markdown**: convert_html_to_markdown.py, convert_xml_html_to_markdown.py
+- **Duplicados**: find_similar_questions.py, evaluate_questions_directory.py
+- **Análisis**: find_similar_questions.py, evaluate_questions_directory.py
+- **Caracteres especiales**: convert_code_blocks_chars.py, [caracteres_especiales.md](caracteres_especiales.md)
+- **CDATA**: ensure_cdata_in_text_blocks.py
+- **Tags**: remove_tags_from_xml.py
+- **Renombrar**: rename_xml_files_by_question_name.py
 
 ### Por Problema
 
-- **"Archivos XML corruptos"** → [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md)
-- **"Encontrar preguntas duplicadas"** → [find_similar_questions.py](find_similar_questions.py), [README_scripts.md](README_scripts.md)
-- **"Evaluar calidad de banco"** → [evaluate_questions_directory.py](evaluate_questions_directory.py), [README_scripts.md](README_scripts.md)
-- **"Convertir HTML a Markdown"** → [README_html_to_markdown.md](README_html_to_markdown.md)
-- **"Editar preguntas más fácilmente"** → [convert_xml_gift.py](convert_xml_gift.py), [README_convert_xml_gift.md](README_convert_xml_gift.md)
-- **"Caracteres { } = # en código"** → [convert_code_blocks_chars.py](convert_code_blocks_chars.py)
-- **"Nombres de archivo descriptivos"** → [rename_xml_files_by_question_name.py](rename_xml_files_by_question_name.py)
+- **"Archivos XML corruptos"** → README_convert_code_blocks_chars_fix.md
+- **"Encontrar preguntas duplicadas"** → find_similar_questions.py, README_scripts.md
+- **"Evaluar calidad de banco"** → evaluate_questions_directory.py, README_scripts.md
+- **"Convertir HTML a Markdown"** → README_html_to_markdown.md
+- **"Editar preguntas más fácilmente"** → convert_xml_gift.py, README_convert_xml_gift.md
+- **"Caracteres { } = # en código"** → convert_code_blocks_chars.py
+- **"Nombres de archivo descriptivos"** → rename_xml_files_by_question_name.py
 
 ## 📊 Comparación de Scripts
 
@@ -240,7 +240,7 @@ vim ./gift/**/*.gift
 | GIFT a XML | convert_xml_gift.py | - |
 | HTML a Markdown | convert_xml_html_to_markdown.py | convert_html_to_markdown.py (fullwidth) |
 
-**Más info:** [DUPLICATES_ANALYSIS.md](DUPLICATES_ANALYSIS.md)
+**Más info:** DUPLICATES_ANALYSIS.md
 
 #### Analizar banco
 
@@ -249,26 +249,26 @@ vim ./gift/**/*.gift
 | Duplicados en 1 archivo | find_similar_questions.py | Análisis rápido |
 | Análisis completo | evaluate_questions_directory.py | Auditoría exhaustiva |
 
-**Más info:** [README_scripts.md](README_scripts.md)
+**Más info:** README_scripts.md
 
 ## 🆘 Solución de Problemas
 
 | Problema | Dónde buscar |
 |----------|--------------|
-| Archivos XML corruptos | [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md) |
-| Duplicados no detectados | [README_scripts.md - Troubleshooting](README_scripts.md) |
-| Caracteres especiales no convierten | [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md) |
-| HTML no se convierte a Markdown | [README_html_to_markdown.md - Solución de Problemas](README_html_to_markdown.md#solución-de-problemas) |
+| Archivos XML corruptos | README_convert_code_blocks_chars_fix.md |
+| Duplicados no detectados | README_scripts.md - Troubleshooting |
+| Caracteres especiales no convierten | README_convert_code_blocks_chars_fix.md |
+| HTML no se convierte a Markdown | README_html_to_markdown.md - Solución de Problemas |
 | Colisiones al renombrar | [README_xml_maintenance.md - Manejo de Colisiones](README_xml_maintenance.md#manejo-de-colisiones) |
 
-**General:** [README.md - Resolución de Problemas](README.md#-resolución-de-problemas-comunes)
+**General:** README.md - Resolución de Problemas
 
 ## 📝 Notas Importantes
 
 ### Scripts con Funcionalidad Similar
 
 - **convert_html_to_markdown.py** vs **convert_xml_html_to_markdown.py**
-  - Ver análisis completo: [DUPLICATES_ANALYSIS.md](DUPLICATES_ANALYSIS.md)
+  - Ver análisis completo: DUPLICATES_ANALYSIS.md
   - Resumen: Uno usa fullwidth (＜＞), otro HTML normal (`<>`)
 
 ### Backups Automáticos
@@ -294,8 +294,8 @@ Scripts de mantenimiento soportan `--dry-run` para previsualizar cambios:
 
 ## 🔗 Enlaces Rápidos
 
-- **Documentación Principal:** [README.md](README.md)
-- **Análisis de Duplicados:** [DUPLICATES_ANALYSIS.md](DUPLICATES_ANALYSIS.md)
+- **Documentación Principal:** README.md
+- **Análisis de Duplicados:** DUPLICATES_ANALYSIS.md
 - **Referencia de Caracteres:** [caracteres_especiales.md](caracteres_especiales.md)
 
 ## 📅 Mantenimiento del Índice

@@ -315,21 +315,21 @@ El proyecto ahora cuenta con:
 ## 📞 Cómo Usar Esta Organización
 
 ### Para nuevos usuarios:
-1. Leer [README.md](README.md)
-2. Identificar tarea en [INDEX.md](INDEX.md)
+1. Leer README.md
+2. Identificar tarea en INDEX.md
 3. Ir a documentación específica
 4. Seguir ejemplos
 
 ### Para usuarios existentes:
-1. Usar [INDEX.md](INDEX.md) para navegación rápida
+1. Usar INDEX.md para navegación rápida
 2. Consultar sección de solución de problemas
 3. Revisar flujos de trabajo para tareas complejas
 
 ### Para mantenedores:
-1. Revisar [DUPLICATES_ANALYSIS.md](DUPLICATES_ANALYSIS.md)
+1. Revisar DUPLICATES_ANALYSIS.md
 2. Seguir plan de acción recomendado
 3. Actualizar documentación al modificar scripts
-4. Mantener [ORGANIZATION_SUMMARY.md](ORGANIZATION_SUMMARY.md) actualizado
+4. Mantener ORGANIZATION_SUMMARY.md actualizado
 
 ---
 

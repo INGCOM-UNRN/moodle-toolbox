@@ -394,6 +394,6 @@ python3 convert_html_to_markdown.py archivo.xml --fullwidth  # HTML fullwidth
 ---
 
 **Relacionado:**
-- [README.md](README.md): Documentación principal del proyecto
-- [README_convert_code_blocks_chars_fix.md](README_convert_code_blocks_chars_fix.md): Conversión de caracteres especiales
+- README.md: Documentación principal del proyecto
+- README_convert_code_blocks_chars_fix.md: Conversión de caracteres especiales
 - [README_xml_maintenance.md](README_xml_maintenance.md): Scripts de mantenimiento
