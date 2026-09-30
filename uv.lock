@@ -883,6 +883,7 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "rich" },
     { name = "typer" },
+    { name = "yutani" },
 ]
 
 [package.optional-dependencies]
@@ -913,6 +914,7 @@ requires-dist = [
     { name = "python-dotenv" },
     { name = "rich", specifier = ">=13.0,<14.0" },
     { name = "typer", specifier = ">=0.12.0" },
+    { name = "yutani", git = "https://github.com/INGCOM-UNRN-P1/yutani?rev=e4c8e1050e5dd87a930c5404aba6b65d1be1665a" },
 ]
 provides-extras = ["ai", "ui", "languagetool"]
 
@@ -1145,4 +1147,13 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/b2/381be8cfdee792dd117872481b6e378f85c957dd7c5bca38897b08f765fd/werkzeug-3.1.8.tar.gz", hash = "sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44", size = 875852, upload-time = "2026-04-02T18:49:14.268Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/8c/2e650f2afeb7ee576912636c23ddb621c91ac6a98e66dc8d29c3c69446e1/werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50", size = 226459, upload-time = "2026-04-02T18:49:12.72Z" },
+]
+
+[[package]]
+name = "yutani"
+version = "0.1.0"
+source = { git = "https://github.com/INGCOM-UNRN-P1/yutani?rev=e4c8e1050e5dd87a930c5404aba6b65d1be1665a#e4c8e1050e5dd87a930c5404aba6b65d1be1665a" }
+dependencies = [
+    { name = "rich" },
+    { name = "typer" },
 ]

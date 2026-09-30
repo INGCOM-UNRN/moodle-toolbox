@@ -3,6 +3,8 @@ import sys
 
 import click
 import typer
+from yutani.cli import CONTEXTO, VARIABLE_DEPURAR, describir_error, opcion_version
+from yutani.textos import traducir
 
 from questions.core.llm_instructions import get_instructions
 
@@ -31,36 +33,29 @@ def llm_callback(ctx, param, value):
     ctx.exit()
 
 
+def _version_instalada() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("questions")
+    except PackageNotFoundError:
+        return "desconocida"
+
+
+# -h/--help, --version/-v y ayuda de Typer/Click en español, desde yutani (N-ECO-14). La app
+# no es TyperConErrores porque main() ejecuta el comando Click y ya atrapa los errores.
+traducir()
 app = typer.Typer(
-    context_settings={"help_option_names": ["-h", "--help"]},
+    context_settings=dict(CONTEXTO),
     help="Herramientas para la gestión de preguntas de Moodle.",
     no_args_is_help=True,
     pretty_exceptions_enable=False,
 )
 
 
-def _mostrar_version(valor: bool) -> None:
-    if valor:
-        from importlib.metadata import PackageNotFoundError, version
-
-        try:
-            numero = version("questions")
-        except PackageNotFoundError:
-            numero = "desconocida"
-        typer.echo(f"moodle-toolbox {numero}")
-        raise typer.Exit(code=0)
-
-
 @app.callback()
 def main_callback(
-    version: bool = typer.Option(
-        False,
-        "--version",
-        "-v",
-        callback=_mostrar_version,
-        is_eager=True,
-        help="Muestra la versión de moodle-toolbox y termina.",
-    ),
+    version: bool = opcion_version("moodle-toolbox", _version_instalada()),  # noqa: ARG001
     llm: bool = typer.Option(
         False,
         "--llm",
@@ -101,9 +96,11 @@ def main():
     try:
         cli()
     except Exception as e:
-        if os.environ.get("QUESTIONS_DEBUG"):
+        if os.environ.get("QUESTIONS_DEBUG") or os.environ.get(VARIABLE_DEPURAR):
             raise
-        click.echo(f"Error: {e} (QUESTIONS_DEBUG=1 muestra el traceback completo)", err=True)
+        # describir_error: los errores de datos (ruta inexistente, archivo que no es UTF-8…) en español.
+        click.echo(f"Error: {describir_error(e)} (QUESTIONS_DEBUG=1 o P1_DEPURAR=1 muestra el traceback "
+                   "completo)", err=True)
         sys.exit(1)
 
 
