@@ -127,3 +127,42 @@ Para más información sobre funcionalidades específicas, consulta la carpeta [
 ---
 
 **Última actualización:** Mayo 2026 (Refactorización a CLI Unificado)
+
+<!-- p1:referencia:inicio — generado por p1-tools/scripts/readme_generado.py: no editar a mano -->
+
+## Referencia rápida
+
+### Requisitos
+
+- Python ≥ 3.11 y [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+### Opciones de `moodle-toolbox`
+
+| Opción | Descripción |
+|:--|:--|
+| `--llm` | Muestra instrucciones generales para un LLM. |
+
+### Comandos de `moodle-toolbox`
+
+| Comando | Descripción |
+|:--|:--|
+| `moodle-toolbox doctor` | Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis). |
+| `moodle-toolbox health` | Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas. |
+| `moodle-toolbox ai` | Procesamiento de preguntas usando IA (Gemini). |
+| `moodle-toolbox validate` | Valida archivos o directorios de preguntas GIFT. |
+| `moodle-toolbox format` | Formatea archivos GIFT y ajusta bloques de código. |
+| `moodle-toolbox split` | Divide archivos GIFT con múltiples preguntas en archivos individuales. |
+| `moodle-toolbox unify` | Unifica árboles o grupos de archivos de preguntas (GIFT o XML) en un único archivo. |
+| `moodle-toolbox synth` | daedalus en belmont: sintetiza preguntas de C verificadas con GCC. |
+| `moodle-toolbox ui` | Abre el editor web local (cerebro) sobre DIRECTORIO. |
+| `moodle-toolbox spellcheck`, `moodle-toolbox languagetool`, `moodle-toolbox grammar` | Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool. |
+| `moodle-toolbox config` | Configuración global de las herramientas. |
+| `moodle-toolbox convert` | Comandos para convertir entre formatos. |
+| `moodle-toolbox fix` | Comandos para corregir problemas comunes. |
+| `moodle-toolbox analyze` | Análisis y estadísticas de preguntas. |
+| `moodle-toolbox tree` | Organiza bancos en árboles de directorios por categoría. |
+| `moodle-toolbox xml` | Herramientas para archivos XML de Moodle. |
+
+Ayuda de cada comando: `moodle-toolbox <comando> -h`.
+
+<!-- p1:referencia:fin -->
