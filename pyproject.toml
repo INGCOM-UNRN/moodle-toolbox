@@ -38,9 +38,9 @@ questions = "questions.cli:main"
 moodle-toolbox = "questions.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox"
-Repository = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox.git"
-Issues = "https://github.com/INGCOM-UNRN-P1/moodle-toolbox/issues"
+Homepage = "https://github.com/INGCOM-UNRN/moodle-toolbox"
+Repository = "https://github.com/INGCOM-UNRN/moodle-toolbox.git"
+Issues = "https://github.com/INGCOM-UNRN/moodle-toolbox/issues"
 
 [project.optional-dependencies]
 # `questions ai` (Gemini). Es opcional: google-genai arrastra muchas
