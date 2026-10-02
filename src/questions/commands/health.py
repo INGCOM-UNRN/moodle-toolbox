@@ -43,6 +43,7 @@ def health_cmd(
         None, "--csv", help="Exportar una fila por pregunta con todas las señales (para planillas)."),
     desde: Optional[str] = typer.Option(
         None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+    tui: bool = typer.Option(False, "--tui", help="Recorrer los hallazgos y aplicar los arreglos en una interfaz de terminal (extra 'tui')."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
     """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces.
@@ -79,6 +80,25 @@ def health_cmd(
                     archivo.write_text(limpio, encoding="utf-8")
                 if not output_json:
                     click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}HTML obsoleto y estilos inline: {archivo}")
+
+    if tui:
+        try:
+            from questions.tui.health import HealthApp
+        except ImportError:
+            fail('La interfaz de terminal requiere el extra opcional \'tui\': '
+                 'uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"')
+
+        def auditar():
+            vigentes = [a for a in archivos if a.exists()]
+            return auditar_archivos(vigentes, min_opciones=min_opciones, umbral_longitud=umbral_longitud)
+
+        arreglados = HealthApp(auditar).run() or {}
+        total = sum(len(v) for v in arreglados.values())
+        click.echo(f"{total} archivos arreglados." if total else "No se arregló nada.")
+        for clave, rutas in arreglados.items():
+            for ruta in rutas:
+                click.echo(f"  ✓ {clave}: {ruta}")
+        return
 
     from questions.core.progreso import barra
 
