@@ -12,13 +12,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, Union
 
-from questions.core.converter import _cdata_sub, _serializar_quiz
+from questions.core.converter import _cdata_sub
 from questions.core.tree import (
     _protect_backslashes_in_code,
     gift_collect,
+    serializar_quiz,
     xml_collect,
 )
-from questions.core.xml_tools import ensure_cdata_in_text_blocks
 
 
 def unificar_gift(
@@ -154,8 +154,7 @@ def unificar_xml(
 
         archivos_procesados.append(filepath)
 
-    xml = _serializar_quiz(quiz_root)
-    xml, _ = ensure_cdata_in_text_blocks(xml)
+    xml = serializar_quiz(quiz_root)
     archivo_salida.parent.mkdir(parents=True, exist_ok=True)
     archivo_salida.write_text(xml, encoding="utf-8")
 

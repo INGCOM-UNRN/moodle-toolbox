@@ -13,8 +13,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from questions.core.converter import _serializar_quiz, _cdata_sub
-from questions.core.xml_tools import sanitize_filename, ensure_cdata_in_text_blocks
+from questions.core.converter import _CD_CLOSE, _CD_OPEN, _cdata_sub
+from questions.core.formatter import format_xml_content
+from questions.core.xml_tools import sanitize_filename
 
 
 def sanitize_dirname(part: str) -> str:
@@ -191,6 +192,16 @@ def gift_collect(base_input_dir: Path, output_file: Path) -> int:
 # Moodle XML
 # ---------------------------------------------------------------------------
 
+def serializar_quiz(quiz: ET.Element) -> str:
+    """Serializa un <quiz> armado con elementos parseados y/o `_cdata_sub`.
+
+    Los elementos que vienen de `ET.parse` ya no tienen CDATA (su texto trae `<` y `&`
+    crudos): el formateador XML vuelve a envolver cada <text> en CDATA.
+    """
+    xml = ET.tostring(quiz, encoding="unicode").replace(_CD_OPEN, "").replace(_CD_CLOSE, "")
+    return format_xml_content(xml)
+
+
 def _quiz_de_pregunta(question: ET.Element) -> ET.Element:
     quiz = ET.Element('quiz')
     quiz.append(question)
@@ -239,7 +250,7 @@ def xml_export(input_file: Path, base_output_dir: Path) -> int:
             filename = f"{base_name}.xml"
 
         destino = output_dir / filename
-        destino.write_text(_serializar_quiz(_quiz_de_pregunta(question)), encoding='utf-8')
+        destino.write_text(serializar_quiz(_quiz_de_pregunta(question)), encoding='utf-8')
         print(f"  Creado: {destino.relative_to(base_output_dir)}")
         question_count += 1
 
@@ -287,9 +298,7 @@ def xml_collect(base_input_dir: Path, output_file: Path) -> int:
         except (ET.ParseError, UnicodeDecodeError) as e:
             print(f"  Error interpretando {filepath}: {e}", file=sys.stderr)
 
-    xml = _serializar_quiz(quiz_root)
-    xml, _ = ensure_cdata_in_text_blocks(xml)
-    output_file.write_text(xml, encoding='utf-8')
+    output_file.write_text(serializar_quiz(quiz_root), encoding='utf-8')
     print(f"\n✓ Colección completada: {question_count} preguntas en {output_file}")
     return question_count
 
