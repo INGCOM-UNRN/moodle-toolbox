@@ -13,8 +13,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from questions.core.converter import _CD_CLOSE, _CD_OPEN, _cdata_sub
-from questions.core.formatter import format_xml_content
+from questions.core.converter import _cdata_sub, _serializar_quiz
 from questions.core.xml_tools import sanitize_filename
 
 
@@ -192,14 +191,8 @@ def gift_collect(base_input_dir: Path, output_file: Path) -> int:
 # Moodle XML
 # ---------------------------------------------------------------------------
 
-def serializar_quiz(quiz: ET.Element) -> str:
-    """Serializa un <quiz> armado con elementos parseados y/o `_cdata_sub`.
-
-    Los elementos que vienen de `ET.parse` ya no tienen CDATA (su texto trae `<` y `&`
-    crudos): el formateador XML vuelve a envolver cada <text> en CDATA.
-    """
-    xml = ET.tostring(quiz, encoding="unicode").replace(_CD_OPEN, "").replace(_CD_CLOSE, "")
-    return format_xml_content(xml)
+# Un único serializador para todo el paquete (ver converter._serializar_quiz).
+serializar_quiz = _serializar_quiz
 
 
 def _quiz_de_pregunta(question: ET.Element) -> ET.Element:

@@ -24,3 +24,15 @@ def test_respuesta_corta_conserva_el_credito_parcial():
     xml = gift_to_xml("::C:: Capital de Francia {=París =%50%Paris}")
     fracciones = [a.get("fraction") for a in ET.fromstring(xml).find("question").findall("answer")]
     assert fracciones == ["100", "50"]
+
+
+def test_gift_a_xml_conserva_lineas_en_blanco_del_codigo_y_es_valido():
+    import xml.etree.ElementTree as ET
+
+    from questions.core.converter import gift_to_xml
+
+    # Con la llave abierta, el parser mantiene la línea en blanco dentro de la pregunta.
+    xml = gift_to_xml("::C:: Ver\n```c\nint main() {\n    int a = 1 < 2 && 3;\n\n    return a;\n}\n```\n{=x ~y}")
+    texto = ET.fromstring(xml).find("question/questiontext/text").text
+    assert "int a = 1 < 2 && 3;\n\n    return a;" in texto
+    assert "<![CDATA[" in xml

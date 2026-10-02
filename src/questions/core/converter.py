@@ -205,11 +205,16 @@ def _pregunta_a_xml(q: Question, defaultgrade: float = 1.0) -> ET.Element:
 
 
 def _serializar_quiz(quiz: ET.Element) -> str:
-    xml = ET.tostring(quiz, encoding="unicode")
-    xml = html.unescape(xml)
-    xml = xml.replace(_CD_OPEN, "<![CDATA[").replace(_CD_CLOSE, "]]>")
-    cuerpo = "\n".join(line for line in xml.splitlines() if line.strip())
-    return f'<?xml version="1.0" encoding="UTF-8"?>\n{cuerpo}\n'
+    """Serializa un <quiz> armado con `_cdata_sub` y/o elementos parseados.
+
+    No desescapa el documento entero ni borra líneas en blanco (las del código de un
+    CDATA son contenido): quita las marcas de CDATA y deja que el formateador XML vuelva
+    a envolver cada <text> en CDATA e indente.
+    """
+    from questions.core.formatter import format_xml_content
+
+    xml = ET.tostring(quiz, encoding="unicode").replace(_CD_OPEN, "").replace(_CD_CLOSE, "")
+    return format_xml_content(xml)
 
 
 def question_to_gift(q: Question, escapar_codigo: bool = True) -> str:
