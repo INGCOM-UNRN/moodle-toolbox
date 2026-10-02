@@ -152,7 +152,9 @@ def _pregunta_a_xml(q: Question, defaultgrade: float = 1.0) -> ET.Element:
     elif q.type == "Short":
         _plain_sub(el, "usecase", "0")
         for c in q.choices:
-            ans = respuesta(_ft_text(c.text), 100.0 if c.is_correct else 0.0)
+            # =%50%Paris: respuesta aceptada con crédito parcial.
+            frac = float(c.weight) if c.weight is not None else (100.0 if c.is_correct else 0.0)
+            ans = respuesta(_ft_text(c.text), frac)
             _agregar_feedback(ans, c.feedback)
         _plain_sub(el, "defaultgrade", f"{defaultgrade:g}")
         _plain_sub(el, "penalty", "0.3333333")
