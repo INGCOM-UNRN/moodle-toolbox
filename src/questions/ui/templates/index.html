@@ -31,6 +31,17 @@
                     <h2>📂 Categorías</h2>
                     <button id="toggle-sidebar-btn" class="toggle-sidebar-btn" title="Colapsar/Expandir panel">◀</button>
                 </div>
+                <div class="tree-filter">
+                    <label for="options-filter-op">Opciones:</label>
+                    <select id="options-filter-op">
+                        <option value="">todas</option>
+                        <option value="lt">menos de</option>
+                        <option value="eq">exactamente</option>
+                        <option value="gt">más de</option>
+                    </select>
+                    <input type="number" id="options-filter-n" min="0" value="4" disabled/>
+                    <span id="options-filter-count" class="filter-count"></span>
+                </div>
                 <div id="loading" class="loading">Cargando...</div>
                 <div id="tree-container" class="tree"></div>
             </aside>

@@ -1234,3 +1234,45 @@ body {
         opacity: 0;
     }
 }
+
+/* Filtro por cantidad de opciones */
+.tree-filter {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0 1.5rem 1rem 1.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.tree-filter select,
+.tree-filter input {
+    padding: 0.2rem 0.3rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.tree-filter input {
+    width: 3.5rem;
+}
+
+.tree-filter .filter-count {
+    font-weight: 600;
+}
+
+.tree-item .options-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    padding: 0 0.35rem;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.tree-item.active .options-badge {
+    color: white;
+    border-color: white;
+}

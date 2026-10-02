@@ -63,3 +63,23 @@ def test_busqueda_por_texto(cliente):
 
 def test_path_traversal_bloqueado(cliente):
     assert cliente.get("/api/question/../../etc/passwd").status_code in (400, 404)
+
+
+def test_arbol_informa_la_cantidad_de_opciones(tmp_path):
+    (tmp_path / "cat").mkdir()
+    (tmp_path / "cat" / "mc.gift").write_text("::MC:: ¿x? {=a ~b ~c ~d}\n", encoding="utf-8")
+    (tmp_path / "cat" / "vf.gift").write_text("::VF:: ¿x? {T}\n", encoding="utf-8")
+    (tmp_path / "par.gift").write_text("::P:: Uní. {=a -> 1 =b -> 2 =c -> 3}\n", encoding="utf-8")
+    (tmp_path / "roto.xml").write_text("<quiz><question", encoding="utf-8")
+    arbol = create_app(str(tmp_path)).test_client().get("/api/tree").get_json()
+    por_nombre = {i["name"]: i for i in arbol}
+    hijos = {i["name"]: i for i in por_nombre["cat"]["children"]}
+    assert hijos["mc.gift"]["options"] == 4
+    assert hijos["vf.gift"]["options"] is None
+    assert por_nombre["par.gift"]["options"] == 3
+    assert por_nombre["roto.xml"]["options"] is None
+
+
+def test_arbol_opciones_xml(cliente):
+    arbol = cliente.get("/api/tree").get_json()
+    assert {i["name"]: i["options"] for i in arbol} == {"banco.gift": 2, "pregunta.xml": 2}

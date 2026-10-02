@@ -4,7 +4,8 @@ class MxvizApp {
     constructor() {
         this.currentQuestion = null;
         this.currentFilepath = null;
-        this.allQuestions = []; // Lista lineal de todas las preguntas
+        this.treeData = []; // Árbol completo tal como lo devuelve /api/tree
+        this.allQuestions = []; // Lista lineal de las preguntas visibles (con el filtro aplicado)
         this.currentIndex = -1; // Índice actual en la lista
         this.init();
     }
@@ -21,6 +22,10 @@ class MxvizApp {
         document.getElementById('search-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleSearch();
         });
+
+        // Filtro por cantidad de opciones
+        document.getElementById('options-filter-op').addEventListener('change', () => this.applyOptionsFilter());
+        document.getElementById('options-filter-n').addEventListener('input', () => this.applyOptionsFilter());
 
         // Sidebar toggle
         document.getElementById('toggle-sidebar-btn').addEventListener('click', () => this.toggleSidebar());
@@ -72,13 +77,55 @@ class MxvizApp {
             const data = await response.json();
 
             loading.style.display = 'none';
-            this.renderTree(data, treeContainer);
-            
-            // Construir lista lineal de preguntas para navegación
-            this.allQuestions = this.buildQuestionsList(data);
+            this.treeData = data;
+            this.applyOptionsFilter();
             console.log(`Total de preguntas cargadas: ${this.allQuestions.length}`);
         } catch (error) {
             loading.textContent = 'Error cargando árbol: ' + error.message;
+        }
+    }
+
+    // Filtro por cantidad de opciones: el árbol y la navegación muestran sólo las preguntas
+    // que cumplen la condición (las de tipos sin opciones, como V/F o ensayo, quedan afuera).
+    optionsFilter() {
+        const op = document.getElementById('options-filter-op').value;
+        const input = document.getElementById('options-filter-n');
+        input.disabled = !op;
+        const n = parseInt(input.value, 10);
+        if (!op || Number.isNaN(n)) return null;
+        return (opciones) => opciones !== null && opciones !== undefined && (
+            op === 'lt' ? opciones < n : op === 'gt' ? opciones > n : opciones === n);
+    }
+
+    filterTree(items, cumple) {
+        const resultado = [];
+        items.forEach(item => {
+            if (item.type === 'directory') {
+                const children = this.filterTree(item.children || [], cumple);
+                const total = this.buildQuestionsList(children).length;
+                if (total > 0) resultado.push({...item, children, question_count: total});
+            } else if (item.type === 'file' && cumple(item.options)) {
+                resultado.push(item);
+            }
+        });
+        return resultado;
+    }
+
+    applyOptionsFilter() {
+        const cumple = this.optionsFilter();
+        const items = cumple ? this.filterTree(this.treeData, cumple) : this.treeData;
+        const treeContainer = document.getElementById('tree-container');
+        treeContainer.innerHTML = '';
+        this.renderTree(items, treeContainer);
+
+        this.allQuestions = this.buildQuestionsList(items);
+        this.currentIndex = this.allQuestions.findIndex(q => q.path === this.currentFilepath);
+        this.updateNavigationBar();
+
+        const contador = document.getElementById('options-filter-count');
+        contador.textContent = cumple ? `${this.allQuestions.length} preguntas` : '';
+        if (cumple && this.allQuestions.length === 0) {
+            treeContainer.innerHTML = '<p class="loading">Ninguna pregunta cumple el filtro.</p>';
         }
     }
 
@@ -109,9 +156,12 @@ class MxvizApp {
             } else if (item.type === 'file') {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'tree-item';
+                const opciones = item.options === null || item.options === undefined ? ''
+                    : `<span class="options-badge" title="Cantidad de opciones">${item.options} op.</span>`;
                 fileItem.innerHTML = `
                     <span class="icon">${this.getTypeIcon(item.question_type)}</span>
                     <span class="name">${item.question_name || item.name}</span>
+                    ${opciones}
                 `;
                 fileItem.addEventListener('click', () => this.loadQuestion(item.path));
                 node.appendChild(fileItem);
@@ -751,9 +801,15 @@ class MxvizApp {
     }
 
     updateNavigationBar() {
-        if (this.allQuestions.length === 0) return;
-
         const counter = document.getElementById('question-counter');
+        if (this.allQuestions.length === 0) {
+            counter.textContent = '0 / 0';
+            ['first-btn', 'prev-btn', 'next-btn', 'last-btn'].forEach(id => {
+                document.getElementById(id).disabled = true;
+            });
+            return;
+        }
+
         const navName = document.getElementById('nav-question-name');
         const firstBtn = document.getElementById('first-btn');
         const prevBtn = document.getElementById('prev-btn');

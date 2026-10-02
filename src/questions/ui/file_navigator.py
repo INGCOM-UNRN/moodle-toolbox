@@ -49,6 +49,7 @@ class FileNavigator:
                     'path': rel_path,
                     'question_type': info.get('type', 'unknown'),
                     'question_name': info.get('name', entry),
+                    'options': self._count_options(full_path),
                 })
 
         return items
@@ -65,6 +66,29 @@ class FileNavigator:
         except PermissionError:
             pass
         return count
+
+    def _count_options(self, filepath):
+        """Opciones de la pregunta que muestra el editor (la primera del archivo), con el
+        criterio de health: respuestas en opción múltiple y respuesta corta, pares en
+        emparejamiento. None en los tipos sin opciones o si el archivo no se puede leer."""
+        from questions.core.banco import parse_archivo
+
+        try:
+            resultado = parse_archivo(filepath)
+        except Exception:
+            return None
+        if not resultado.get('success'):
+            return None
+        for p in resultado['questions']:
+            tipo = p.get('type')
+            if tipo == 'Category':
+                continue
+            if tipo in ('MC', 'Short'):
+                return len(p.get('choices', []))
+            if tipo == 'Matching':
+                return len(p.get('matchPairs', []))
+            return None
+        return None
 
     def _get_question_info(self, filepath):
         """Extrae tipo y nombre de la pregunta sin parsear todo el árbol."""
