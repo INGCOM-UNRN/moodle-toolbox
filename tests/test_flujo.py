@@ -136,3 +136,20 @@ def test_desde_procesa_solo_lo_cambiado(tmp_path):
     (fuera / "a.gift").write_text("::A:: q {T}\n", encoding="utf-8")
     res = runner.invoke(cli, ["health", str(fuera), "--desde", "HEAD"])
     assert res.exit_code == 1 and "git" in res.output
+
+
+def test_accion_de_github_declara_sus_entradas_y_salidas():
+    import re
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[1]
+    accion = (raiz / "action.yml").read_text(encoding="utf-8")
+    entradas = re.findall(r"^  (\w+):\n    description:", accion.split("\noutputs:")[0], re.M)
+    assert entradas == ["rutas", "desde", "estricto", "comentar", "version", "token"]
+    assert re.findall(r"^  (\w+):\n", accion.split("\noutputs:")[1].split("\nruns:")[0], re.M) == ["ok", "errores", "advertencias"]
+    assert "using: composite" in accion and "questions health" in accion
+    # Las entradas llegan al script por variables de entorno, nunca interpoladas en el código.
+    script = accion.split("      run: |\n", 1)[1]
+    assert "${{" not in script
+    ejemplo = (raiz / "docs" / "ejemplos" / "salud-banco.yml").read_text(encoding="utf-8")
+    assert "uses: INGCOM-UNRN/moodle-toolbox@main" in ejemplo and "fetch-depth: 0" in ejemplo

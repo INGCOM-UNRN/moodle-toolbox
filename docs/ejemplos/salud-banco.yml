@@ -1,0 +1,21 @@
+# Workflow de ejemplo para un repositorio de preguntas: copiarlo a .github/workflows/salud.yml
+name: Salud del banco
+
+on:
+  pull_request:
+    paths: ["**/*.gift", "**/*.xml"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  salud:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # para revisar sólo lo que cambia respecto de la base del PR
+      - uses: INGCOM-UNRN/moodle-toolbox@main
+        with:
+          rutas: preguntas

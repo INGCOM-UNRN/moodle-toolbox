@@ -1,0 +1,103 @@
+name: Salud del banco de preguntas (moodle-toolbox)
+description: >
+  Corre `questions health` sobre un banco de preguntas GIFT / Moodle XML, publica el informe en el
+  resumen del job y como comentario del pull request, y falla si hay errores (o advertencias, con
+  estricto).
+author: Programación I - UNRN Andina
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  rutas:
+    description: Archivos o directorios a revisar (separados por espacios).
+    default: "."
+  desde:
+    description: >
+      Revisión git desde la cual revisar sólo lo cambiado. Vacío: en un pull request, la base del PR
+      (requiere actions/checkout con fetch-depth 0); fuera de un PR, todo el banco.
+    default: ""
+  estricto:
+    description: "true: fallar también ante advertencias."
+    default: "false"
+  comentar:
+    description: "true: publicar el informe como comentario del pull request (necesita pull-requests: write)."
+    default: "true"
+  version:
+    description: Rama, etiqueta o commit de moodle-toolbox a instalar.
+    default: main
+  token:
+    description: Token para comentar en el pull request.
+    default: ${{ github.token }}
+
+outputs:
+  ok:
+    description: "true si no hay errores."
+    value: ${{ steps.salud.outputs.ok }}
+  errores:
+    description: Cantidad de errores.
+    value: ${{ steps.salud.outputs.errores }}
+  advertencias:
+    description: Cantidad de advertencias.
+    value: ${{ steps.salud.outputs.advertencias }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v5
+
+    - name: Instalar moodle-toolbox
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: uv tool install "git+https://github.com/INGCOM-UNRN/moodle-toolbox@${VERSION}"
+
+    - name: Revisar la salud del banco
+      id: salud
+      shell: bash
+      env:
+        RUTAS: ${{ inputs.rutas }}
+        DESDE: ${{ inputs.desde }}
+        ESTRICTO: ${{ inputs.estricto }}
+        COMENTAR: ${{ inputs.comentar }}
+        GH_TOKEN: ${{ inputs.token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        set -u
+        desde="$DESDE"
+        if [ -z "$desde" ] && [ -n "${GITHUB_BASE_REF:-}" ]; then
+          git fetch --no-tags --quiet origin "$GITHUB_BASE_REF"
+          desde="$(git merge-base HEAD FETCH_HEAD)"
+        fi
+        argumentos=(-r --md "$RUNNER_TEMP/salud.md" --json --max-items 30)
+        [ -n "$desde" ] && argumentos+=(--desde "$desde")
+        [ "$ESTRICTO" = "true" ] && argumentos+=(--estricto)
+        read -r -a rutas <<< "$RUTAS"
+
+        codigo=0
+        questions health "${rutas[@]}" "${argumentos[@]}" > "$RUNNER_TEMP/salud.json" || codigo=$?
+
+        if [ -s "$RUNNER_TEMP/salud.json" ] && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$RUNNER_TEMP/salud.json" 2>/dev/null; then
+          python3 - "$RUNNER_TEMP/salud.json" >> "$GITHUB_OUTPUT" <<'PY'
+        import json, sys
+        datos = json.load(open(sys.argv[1]))
+        resumen = datos.get("resumen", {})
+        print(f"ok={'true' if resumen.get('ok') else 'false'}")
+        print(f"errores={resumen.get('total_errores', 0)}")
+        print(f"advertencias={resumen.get('total_advertencias', 0)}")
+        PY
+        else
+          # Sin archivos que revisar (p. ej. el PR no toca preguntas): nada que informar.
+          cat "$RUNNER_TEMP/salud.json"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+          exit "$codigo"
+        fi
+
+        cat "$RUNNER_TEMP/salud.md" >> "$GITHUB_STEP_SUMMARY"
+        if [ "$COMENTAR" = "true" ] && [ -n "$PR" ]; then
+          head -c 60000 "$RUNNER_TEMP/salud.md" > "$RUNNER_TEMP/comentario.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last 2>/dev/null \
+            || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" \
+            || echo "::warning::No se pudo comentar en el pull request (¿permiso pull-requests: write?)"
+        fi
+        exit "$codigo"
