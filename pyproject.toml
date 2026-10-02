@@ -52,6 +52,10 @@ ui = [
     "flask>=3.0",
     "markdown",
 ]
+# Interfaz de terminal para revisar duplicados (`questions dedup --tui`).
+tui = [
+    "textual>=6.0",
+]
 
 # Revisión ortográfica con LanguageTool (delegada en myst-tools).
 languagetool = [
