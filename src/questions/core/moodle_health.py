@@ -19,6 +19,7 @@ Incluye:
 """
 from __future__ import annotations
 
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -27,6 +28,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from questions.core.banco import formato_de, parse_archivo
 from questions.core.codigo import diagnosticar_codigo, transformar_textos_xml
+from questions.core.metadatos import NIVELES_BLOOM, codigo_bloom
 from questions.core.moodle_xml import parse_xml
 from questions.core.parser import parse_gift
 
@@ -368,6 +370,52 @@ def auditar_texto(contenido: str, formato: str) -> Dict[str, Any]:
 # Auditoría completa
 # ---------------------------------------------------------------------------
 
+def _categoria_legible(ruta: str) -> str:
+    ruta = ruta.replace("$course$", "").replace("$cat1$", "").strip().strip("/")
+    return ruta or "(raíz)"
+
+
+def _carpeta(ruta: Path, base: Path) -> str:
+    try:
+        relativa = Path(ruta).resolve().parent.relative_to(base)
+    except ValueError:
+        relativa = Path(ruta).parent
+    return str(relativa).replace(os.sep, "/") if str(relativa) != "." else "(raíz)"
+
+
+ALTOS = ("analizar", "evaluar", "crear")
+
+
+def auditar_clasificacion(preguntas: Iterable[dict], minimo_categoria: int = 5) -> Dict[str, Any]:
+    """Bloom y dificultad (de `metadata`) y matriz categoría × Bloom (blueprint).
+
+    Advierte las categorías con al menos `minimo_categoria` preguntas clasificadas y
+    ninguna de nivel alto (analizar, evaluar, crear).
+    """
+    evaluables = _evaluables(preguntas)
+    clasificadas = [p for p in evaluables if (p.get("metadata") or {}).get("bloom")]
+    bloom = Counter(p["metadata"]["bloom"] for p in clasificadas)
+    matriz: Dict[str, Counter] = {}
+    for p in clasificadas:
+        matriz.setdefault(p.get("categoria") or "(sin categoría)", Counter())[p["metadata"]["bloom"]] += 1
+    enunciado = [p["metadata"]["dificultad_enunciado"] for p in clasificadas if "dificultad_enunciado" in p["metadata"]]
+    respuestas = [p["metadata"]["dificultad_respuestas"] for p in clasificadas if "dificultad_respuestas" in p["metadata"]]
+    sin_altos = [
+        {"categoria": cat, "clasificadas": sum(c.values())}
+        for cat, c in sorted(matriz.items())
+        if sum(c.values()) >= minimo_categoria and not any(c[n] for n in ALTOS)
+    ]
+    return {
+        "evaluables": len(evaluables),
+        "clasificadas": len(clasificadas),
+        "bloom": {n: bloom.get(n, 0) for n in NIVELES_BLOOM},
+        "dificultad_enunciado_media": round(mean(enunciado), 2) if enunciado else None,
+        "dificultad_respuestas_media": round(mean(respuestas), 2) if respuestas else None,
+        "blueprint": {cat: {n: c.get(n, 0) for n in NIVELES_BLOOM} for cat, c in sorted(matriz.items())},
+        "categorias_sin_niveles_altos": sin_altos,
+    }
+
+
 def auditar_preguntas(
     preguntas: List[dict],
     min_opciones: int = MIN_OPCIONES,
@@ -380,6 +428,7 @@ def auditar_preguntas(
         "retroalimentacion": auditar_feedback(preguntas),
         "opciones": auditar_opciones(preguntas, min_opciones),
         "longitud": auditar_longitudes(preguntas, umbral_longitud),
+        "clasificacion": auditar_clasificacion(preguntas),
     }
 
 
@@ -398,6 +447,7 @@ def auditar_archivos(
     archivos_codigo: List[dict] = []
     html_obsoleto: List[dict] = []
     archivos = list(archivos)
+    base = Path(os.path.commonpath([str(Path(a).resolve().parent) for a in archivos])) if archivos else Path(".")
 
     for ruta in archivos:
         formato = formato_de(ruta) or "gift"
@@ -411,8 +461,15 @@ def auditar_archivos(
         if not resultado.get("success"):
             errores.append({"archivo": str(ruta), "error": resultado["error"]["message"]})
         else:
+            # Categoría: la última $CATEGORY / <question type="category"> del archivo o, en un
+            # árbol de una pregunta por archivo, la carpeta relativa a la raíz del banco.
+            categoria = None
             for p in resultado["questions"]:
-                preguntas.append({**p, "filepath": str(ruta), "formato": formato})
+                if p.get("type") == "Category":
+                    categoria = _categoria_legible(p.get("title") or "")
+                    continue
+                preguntas.append({**p, "filepath": str(ruta), "formato": formato,
+                                  "categoria": categoria or _carpeta(ruta, base)})
 
         texto = auditar_texto(contenido, formato)
         enlaces["total_urls"] += texto["enlaces"]["total_urls"]
@@ -477,6 +534,8 @@ def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
         ("correcta_mas_corta", "preguntas donde la correcta es notablemente más corta", len(lon["preguntas_correcta_mas_corta"])),
         ("codigo_sin_cerrar", "preguntas con un ` o ``` sin cerrar", len(est["preguntas_codigo_sin_cerrar"])),
         ("sin_titulo", "preguntas sin título", len(est["preguntas_sin_titulo"])),
+        ("sin_niveles_altos", "categorías sin preguntas de B4–B6 (analizar, evaluar, crear)",
+         len(resultado.get("clasificacion", {}).get("categorias_sin_niveles_altos", []))),
         ("codigo_xml_sin_proteger", "archivos XML con código sin proteger (se rompería al pasar a GIFT)",
          sum(1 for a in codigo_xml if a["sin_proteger"] or a["lineas_vacias"])),
         ("marcas_no_canonicas", "archivos con marcas no canónicas en el código", sum(1 for a in cod["archivos"] if a["variantes"])),
@@ -657,6 +716,33 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
             _lista(lineas, sorted(lon[clave], key=lambda i: -abs(i["razon"] - 1)),
                    lambda i: f"{i['titulo']} (×{i['razon']:g}: {i['largo_correcta']:g} vs {i['largo_distractores']:g} caracteres)",
                    max_items)
+
+    cla = resultado.get("clasificacion")
+    if cla and cla["clasificadas"]:
+        lineas.append("## Clasificación (Bloom y dificultad)")
+        lineas.append(f"- Clasificadas: {cla['clasificadas']} de {cla['evaluables']} "
+                      f"({_pct(cla['clasificadas'], cla['evaluables'])}); `questions ai --mode classify` clasifica el resto")
+        if cla["dificultad_enunciado_media"] is not None:
+            lineas.append(f"- Dificultad media (1–5): enunciado {cla['dificultad_enunciado_media']:g}"
+                          + (f", respuestas {cla['dificultad_respuestas_media']:g}" if cla["dificultad_respuestas_media"] is not None else ""))
+        lineas.append("")
+        encabezado = " | ".join(f"{codigo_bloom(n)} {n}" for n in NIVELES_BLOOM)
+        lineas.append(f"| Categoría | {encabezado} | Total |")
+        lineas.append("| :-- |" + " --: |" * (len(NIVELES_BLOOM) + 1))
+        lineas.append("| **Banco** | " + " | ".join(str(cla["bloom"][n]) for n in NIVELES_BLOOM)
+                      + f" | {cla['clasificadas']} |")
+        filas = sorted(cla["blueprint"].items(), key=lambda kv: -sum(kv[1].values()))
+        mostradas = filas if not max_items else filas[:max_items]
+        for cat, cuenta in mostradas:
+            lineas.append(f"| {cat} | " + " | ".join(str(cuenta[n] or "·") for n in NIVELES_BLOOM)
+                          + f" | {sum(cuenta.values())} |")
+        if len(filas) > len(mostradas):
+            lineas.append(f"| … y {len(filas) - len(mostradas)} categorías más | " + " |" * (len(NIVELES_BLOOM) + 1))
+        lineas.append("")
+        if cla["categorias_sin_niveles_altos"]:
+            lineas.append("> [!TIP]\n> Categorías sin preguntas de analizar, evaluar o crear (B4–B6):\n")
+            _lista(lineas, cla["categorias_sin_niveles_altos"],
+                   lambda i: f"{i['categoria']} ({i['clasificadas']} clasificadas)", max_items)
 
     lineas.append("## Código")
     lineas.append(f"- Secciones de código: {cod['secciones']}")
