@@ -252,3 +252,29 @@ def comparar(salida: str, opciones: list) -> tuple:
     return "revisar", None, "la salida no aparece literalmente en ninguna opción"
 
 PROBLEMAS = ("coincide_distractor", "no_compila", "error_ejecucion", "tiempo", "comportamiento_indefinido")
+
+
+# ---------------------------------------------------------------------------
+# Estilo de la cátedra (reglas 0x00XXh de ripley, opcional)
+# ---------------------------------------------------------------------------
+
+INSTALAR_RIPLEY = 'uv pip install "ripley @ git+https://github.com/martinvilu/ripley"'
+
+
+def verificador_de_estilo():
+    """El evaluador de reglas de Programación I de ripley, o None si ripley no está instalado."""
+    try:
+        from ripley.core.p1_rules import P1RuleChecker
+    except ImportError:
+        return None
+    return P1RuleChecker()
+
+
+def revisar_estilo(q: Question, verificador) -> Optional[List[dict]]:
+    """Reglas de estilo que incumple el código C del enunciado (None si no hay código C)."""
+    extraido = extraer_codigo(q)
+    if extraido is None or extraido[0] != "c":
+        return None
+    observaciones = verificador.analyze(extraido[1], "pregunta.c")
+    return [{"regla": o.rule_code, "linea": o.line, "severidad": o.severity, "titulo": o.title}
+            for o in observaciones]

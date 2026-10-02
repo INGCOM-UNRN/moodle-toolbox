@@ -34,6 +34,9 @@ def verify(
     todas: bool = typer.Option(False, "--todas", help="Verificar toda pregunta con código, no sólo las que piden la salida."),
     sanitizar: bool = typer.Option(
         False, "--sanitizar", help="C: compilar con -fsanitize=address,undefined para detectar comportamiento indefinido."),
+    estilo: bool = typer.Option(
+        False, "--estilo",
+        help="Revisar el código C con las reglas de estilo de la cátedra (0x00XXh, requiere ripley). No cambia el código de salida."),
     concurrencia: int = typer.Option(4, "--concurrencia", help="Compilaciones simultáneas."),
     solo_problemas: bool = typer.Option(False, "--solo-problemas", help="Listar sólo las preguntas con problemas."),
     output_json: bool = typer.Option(False, "--json", help="Emite los resultados como JSON versionado."),
@@ -50,11 +53,28 @@ def verify(
     with contextlib.redirect_stdout(io.StringIO()):
         unidades = [u for u in unidades_de(leer_archivos(archivos_rutas)) if u.pregunta is not None]
 
+    verificador = None
+    if estilo:
+        from questions.core.verificar import INSTALAR_RIPLEY, verificador_de_estilo
+
+        verificador = verificador_de_estilo()
+        if verificador is None:
+            fail(f"--estilo usa las reglas de ripley, que no está instalado en este entorno: {INSTALAR_RIPLEY}")
+
     def uno(u):
         return u, verificar(u.pregunta, sanitizar=sanitizar, todas=todas)
 
     with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
         resultados = [(u, r) for u, r in ejecutor.map(uno, unidades) if r is not None]
+
+    estilos = []
+    if verificador is not None:
+        from questions.core.verificar import revisar_estilo
+
+        for u in unidades:
+            observaciones = revisar_estilo(u.pregunta, verificador)
+            if observaciones:
+                estilos.append((u, observaciones))
 
     conteo = Counter(r.estado for _, r in resultados)
     problemas = [(u, r) for u, r in resultados if r.estado in PROBLEMAS]
@@ -68,6 +88,8 @@ def verify(
                  "salida": r.salida, "detalle": r.detalle, "coincide_con": r.coincide_con}
                 for u, r in resultados if not solo_problemas or r.estado in PROBLEMAS
             ],
+            **({"estilo": [{"archivo": str(u.archivo), "titulo": u.pregunta.title, "observaciones": obs}
+                           for u, obs in estilos]} if verificador is not None else {}),
         })
     else:
         for u, r in resultados:
@@ -79,6 +101,12 @@ def verify(
                     click.echo(f"      salida: {r.salida.strip()[:120]!r}")
                 if r.detalle:
                     click.echo(f"      {r.detalle[:160]}")
+        if verificador is not None:
+            click.echo(f"\nEstilo (reglas de la cátedra): {len(estilos)} preguntas con observaciones")
+            for u, obs in estilos:
+                reglas = Counter(o["regla"] for o in obs)
+                click.echo(f"  {u.archivo} — {u.pregunta.title or '<sin título>'}: "
+                           + ", ".join(f"{r} ×{n}" if n > 1 else r for r, n in sorted(reglas.items())))
         resumen = ", ".join(f"{n} {e}" for e, n in conteo.most_common())
         click.echo(f"\n{len(resultados)} preguntas verificadas: {resumen or 'ninguna con código ejecutable'}.")
 

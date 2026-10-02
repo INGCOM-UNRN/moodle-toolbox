@@ -75,3 +75,29 @@ def test_cli_verify_json_y_codigo_de_salida(tmp_path):
     (tmp_path / "mal.gift").write_text("::B::[markdown]¿Qué imprime?\n```c\nprintf(\"%d\", 7 / 2);\n```\n{=3.5 ~3}\n", encoding="utf-8")
     res = runner.invoke(cli, ["verify", str(tmp_path), "--solo-problemas"])
     assert res.exit_code == 1 and "distractor" in res.output and "mal.gift" in res.output and "ok.gift" not in res.output
+
+
+def test_estilo_con_un_verificador(tmp_path):
+    from questions.core.verificar import revisar_estilo
+
+    class Observacion:
+        def __init__(self, codigo, linea):
+            self.rule_code, self.line, self.severity, self.title = codigo, linea, "ESTILO", "t"
+
+    class Verificador:
+        def analyze(self, codigo, nombre):
+            assert "int a, b;" in codigo and nombre.endswith(".c")
+            return [Observacion("0x0002h", 1)]
+
+    q = _q("::P::[markdown]¿Qué hace?\n```c\nint a, b;\n```\n{=a ~b}")
+    assert revisar_estilo(q, Verificador()) == [{"regla": "0x0002h", "linea": 1, "severidad": "ESTILO", "titulo": "t"}]
+    assert revisar_estilo(_q("::J:: ¿Qué?\n```java\nint a;\n```\n{=a ~b}"), Verificador()) is None
+
+
+def test_cli_estilo_sin_ripley_explica_como_instalarlo(tmp_path, monkeypatch):
+    import questions.core.verificar as verificar_mod
+
+    monkeypatch.setattr(verificar_mod, "verificador_de_estilo", lambda: None)
+    (tmp_path / "a.gift").write_text("::A:: q {=a ~b}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["verify", str(tmp_path), "--estilo"])
+    assert res.exit_code == 1 and "ripley" in res.output
