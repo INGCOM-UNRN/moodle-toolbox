@@ -97,7 +97,7 @@ class GiftParser:
         title = None
         title_match = re.match(r'^::([^:]+(?::(?!:)[^:]*)*)::(.*)$', text, re.DOTALL)
         if title_match:
-            title = title_match.group(1).strip()
+            title = semantics._decode_escapes(title_match.group(1).strip())
             text = title_match.group(2)
         
         # Extraer el bloque de respuestas como ÚLTIMO grupo balanceado de
