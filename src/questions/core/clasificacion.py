@@ -350,6 +350,9 @@ def run_clasificacion(file_paths: List[Path], output_dir: Optional[Path], in_pla
         return None
     if dry_run:
         q = pendientes[0].pregunta
+        entrada = sum(len(json.dumps({"state": estado(u.pregunta, contexto), "questions": preguntas_jev(u.pregunta)},
+                                     ensure_ascii=False)) for u in pendientes) // 4
+        print(f"💰 ≈{entrada:,} tokens de entrada y ≈{25 * len(pendientes):,} de salida (aprox.)".replace(",", "."))
         print(f"🧪 Simulación: {len(pendientes)} solicitudes a {MODELO}; no se llama a la API. Primera solicitud:\n")
         print(json.dumps({"state": estado(q, contexto), "questions": preguntas_jev(q)}, ensure_ascii=False, indent=2))
         return None

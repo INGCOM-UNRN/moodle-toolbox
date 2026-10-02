@@ -232,3 +232,17 @@ def test_cache_evita_volver_a_consultar_al_modelo(tmp_path):
     archivo = tmp_path / "banco" / "b.gift"
     ai.run_global_ai_processing(modelo, "simulado", [archivo], tmp_path / "salida", "improve", usar_cache=False)
     assert len(modelo.prompts) == 3
+
+
+def test_estimacion_de_tokens_y_costo(tmp_path):
+    from click.testing import CliRunner
+
+    from questions.cli import cli
+
+    (tmp_path / "b.gift").write_text(GIFT, encoding="utf-8")
+    res = CliRunner().invoke(cli, ["ai", str(tmp_path), "--dry-run", "--precio-entrada", "1", "--precio-salida", "5"])
+    assert res.exit_code == 0, res.output
+    assert "tokens de entrada" in res.output and "costo estimado ≈ USD 0.00" in res.output
+    pocos = ai.estimar_tokens(ai.unidades_de(ai.leer_archivos([tmp_path / "b.gift"])), "improve", None, 5)
+    muchos = ai.estimar_tokens(ai.unidades_de(ai.leer_archivos([tmp_path / "b.gift"])), "multiply", None, 5)
+    assert pocos["entrada"] > pocos["salida"] > 0 and abs(muchos["salida"] - 3 * pocos["salida"]) <= 3

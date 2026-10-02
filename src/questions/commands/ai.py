@@ -30,6 +30,10 @@ def ai(
     concurrencia: int = typer.Option(4, "--concurrencia", help="classify: solicitudes simultáneas a Jev."),
     reclasificar: bool = typer.Option(False, "--reclasificar", help="classify: volver a clasificar las ya clasificadas."),
     tags: bool = typer.Option(False, "--tags", help="classify: escribir también tags de Moodle (bloom:…, dificultad-…)."),
+    precio_entrada: Optional[float] = typer.Option(
+        None, "--precio-entrada", help="USD por millón de tokens de entrada, para estimar el costo."),
+    precio_salida: Optional[float] = typer.Option(
+        None, "--precio-salida", help="USD por millón de tokens de salida, para estimar el costo."),
     sin_cache: bool = typer.Option(
         False, "--sin-cache", help="No usar ni guardar respuestas en la caché (~/.cache/questions)."),
     dry_run: bool = typer.Option(
@@ -112,4 +116,6 @@ def ai(
         suffix=suffix,
         dry_run=dry_run,
         usar_cache=not sin_cache,
+        precio_entrada=precio_entrada,
+        precio_salida=precio_salida,
     )

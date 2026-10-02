@@ -583,6 +583,29 @@ def escribir(archivo: Archivo) -> str:
 # Proceso global
 # ---------------------------------------------------------------------------
 
+CARACTERES_POR_TOKEN = 4  # aproximación usual para texto mayormente ASCII
+SALIDA_POR_MODO = {"multiply": VARIACIONES, "feedback": 1.4}
+
+
+def estimar_tokens(unidades: List[Unidad], mode: str, custom_prompt: Optional[str], batch_size: int) -> Dict[str, int]:
+    """Tokens aproximados de entrada (prompts completos) y de salida (preguntas devueltas)."""
+    entrada = salida = 0
+    for i in range(0, len(unidades), batch_size):
+        lote = unidades[i:i + batch_size]
+        entrada += len(construir_prompt([u.texto for u in lote], mode, custom_prompt))
+        salida += sum(len(u.texto) for u in lote)
+    factor = SALIDA_POR_MODO.get(mode, 1)
+    return {"entrada": round(entrada / CARACTERES_POR_TOKEN), "salida": round(salida * factor / CARACTERES_POR_TOKEN)}
+
+
+def describir_costo(tokens: Dict[str, int], precio_entrada: Optional[float], precio_salida: Optional[float]) -> str:
+    texto = f"≈{tokens['entrada']:,} tokens de entrada y ≈{tokens['salida']:,} de salida (aprox. 4 caracteres por token)"
+    if precio_entrada is not None or precio_salida is not None:
+        costo = tokens["entrada"] * (precio_entrada or 0) / 1e6 + tokens["salida"] * (precio_salida or 0) / 1e6
+        texto += f"; costo estimado ≈ USD {costo:,.2f}"
+    return texto.replace(",", ".")
+
+
 def estadisticas(unidades: List[Unidad]) -> Dict[str, int]:
     original = sum(len(u.original) for u in unidades)
     enviado = sum(len(u.texto) for u in unidades)
@@ -591,7 +614,8 @@ def estadisticas(unidades: List[Unidad]) -> Dict[str, int]:
 
 def run_global_ai_processing(client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str,
                              custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False,
-                             suffix: Optional[str] = None, dry_run: bool = False, usar_cache: bool = True):
+                             suffix: Optional[str] = None, dry_run: bool = False, usar_cache: bool = True,
+                             precio_entrada: Optional[float] = None, precio_salida: Optional[float] = None):
     """Procesa todas las preguntas de todos los archivos (GIFT y XML) en lotes globales."""
     print(f"🔍 Escaneando {len(file_paths)} archivos...")
     archivos = leer_archivos(file_paths)
@@ -609,6 +633,11 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
 
     lotes = [unidades[i:i + batch_size] for i in range(0, len(unidades), batch_size)]
     if dry_run:
+        pendientes_sim = [u for u in unidades
+                          if Cache("ai", activa=usar_cache).obtener(_clave_cache(model_id, mode, custom_prompt, u)) is None]
+        en_cache = len(unidades) - len(pendientes_sim)
+        print(f"💰 {describir_costo(estimar_tokens(pendientes_sim, mode, custom_prompt, batch_size), precio_entrada, precio_salida)}"
+              + (f" ({en_cache} preguntas ya están en la caché)" if en_cache else ""))
         print(f"🧪 Simulación: {len(lotes)} lotes; no se llama al modelo. Primer lote:\n")
         print(construir_prompt([u.texto for u in lotes[0]], mode, custom_prompt))
         return
@@ -618,6 +647,8 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
     if cache.aciertos:
         print(f"♻️  {cache.aciertos} preguntas resueltas desde la caché (sin consultar al modelo).")
     lotes = [pendientes[i:i + batch_size] for i in range(0, len(pendientes), batch_size)]
+    if pendientes:
+        print(f"💰 {describir_costo(estimar_tokens(pendientes, mode, custom_prompt, batch_size), precio_entrada, precio_salida)}")
     print(f"🚀 Procesando en {len(lotes)} lotes de hasta {batch_size} preguntas...")
     sin_cambios = 0
     for n, lote in enumerate(lotes, 1):
