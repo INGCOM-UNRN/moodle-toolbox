@@ -24,6 +24,7 @@ versiones según [SemVer](https://semver.org/lang/es/).
 - **ai --mode classify**: `--calibrar referencias.csv` mide la concordancia con una clasificación hecha por docentes (exacta, ±1 nivel, kappa, matriz, error de dificultad) sin escribir nada; `--revisar` abre una interfaz de terminal para corregir las clasificaciones con poca confianza (1–6 Bloom, +/- dificultad), que quedan como `manual` (reclasificar no las pisa) y se agregan a `--referencias`.
 - **dedup**: `--confirmar-jev` confirma cada par con Jev y descarta los que no evalúan lo mismo; `--aplicar` guarda una copia completa de cada archivo modificado o borrado en `--respaldo` y `--restaurar ultimo` lo deshace sin pisar ediciones posteriores.
 - **fix**: `code-lang` etiqueta el lenguaje de los bloques ``` (C o Java); `code-format` formatea el código C y Java con clang-format.
+- **fix extension**: renombra `.xml` ↔ `.gift` según el contenido de cada archivo, sin pisar los existentes; `--json`.
 - **format**: `--check` (sale con 1 si algo cambiaría) y `--diff`, para CI y pre-commit; `--json`.
 - **moodle subir**: sube un banco a un curso de Moodle por servicio web (requiere el plugin `local_questions_importer_ws` en el sitio): convierte y unifica GIFT/XML, lo sube al área de borradores e importa con sus categorías.
 - **configuración por banco**: `.questions.toml` en la raíz del repositorio con los valores por defecto de `health`, `format`, `dedup` y `ai`, y `[general] ignorar` para excluir rutas; las opciones de la línea de comandos tienen prioridad.

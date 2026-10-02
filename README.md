@@ -101,6 +101,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions fix slugify`: Normaliza nombres de archivos (minúsculas, sin acentos).
 - `questions fix name-from-title`: Renombra archivos según el título de la pregunta.
 - `questions fix title-from-name`: Actualiza el título interno según el nombre del archivo.
+- `questions fix extension`: Corrige la extensión según el contenido (`.xml` con GIFT adentro pasa a `.gift` y viceversa); no pisa archivos existentes.
 
 ### 3. Conversión
 - `questions convert html-to-md`: Convierte etiquetas HTML a Markdown en archivos XML o GIFT.
