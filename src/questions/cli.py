@@ -12,6 +12,7 @@ from questions.commands.ai import ai
 from questions.commands.analyze import analyze_app
 from questions.commands.config import config_app
 from questions.commands.convert import convert_app
+from questions.commands.dedup import dedup
 from questions.commands.doctor import doctor_cmd
 from questions.commands.fix import fix_app
 from questions.commands.format import format_cmd
@@ -71,6 +72,7 @@ app.command("doctor")(doctor_cmd)
 app.command("health")(health_cmd)
 app.command("ai")(ai)
 app.command("validate")(validate)
+app.command("dedup")(dedup)
 app.command("format")(format_cmd)
 app.command("split")(split)
 app.command("unify")(unify)

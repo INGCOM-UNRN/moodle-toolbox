@@ -76,6 +76,14 @@ UNIFY_INSTRUCTIONS = r"""
 3. **Soporte Biformato**: Funciona transparentemente para GIFT y Moodle XML deduciendo el formato por la extensión de salida o mediante `-f/--format`.
 """
 
+DEDUP_INSTRUCTIONS = r"""
+# Instrucciones para LLM: Eliminar Duplicados
+1. **Simulá primero**: `dedup` sin `--aplicar` sólo muestra los grupos; revisalos antes de eliminar.
+2. **Umbral**: `-s` (0–1, por defecto 0.95). Más bajo encuentra más duplicados y más falsos positivos; usá `analyze similar -s` para explorar.
+3. **Qué se conserva**: de cada grupo, la pregunta más completa (feedback, título, opciones) o la primera (`--conservar primera`). Sólo se comparan preguntas del mismo tipo.
+4. **Efecto**: en GIFT se quita el bloque (las `$CATEGORY` quedan), en XML el `<question>` con sus comentarios; un archivo sin preguntas se borra.
+"""
+
 def get_instructions(command_name):
     mapping = {
         'validate': VALIDATE_INSTRUCTIONS,
@@ -87,6 +95,7 @@ def get_instructions(command_name):
         'ai': AI_INSTRUCTIONS,
         'fix': FIX_INSTRUCTIONS,
         'split': SPLIT_INSTRUCTIONS,
+        'dedup': DEDUP_INSTRUCTIONS,
         'unify': UNIFY_INSTRUCTIONS,
     }
     return mapping.get(command_name, GENERAL_INSTRUCTIONS)

@@ -1,0 +1,267 @@
+"""Eliminación de preguntas duplicadas (GIFT y Moodle XML) según un umbral de similitud.
+
+La similitud es la misma de `analyze similar` (TF-IDF + Jaccard sobre título,
+enunciado y respuestas). Como se elimina, el criterio es conservador: además del
+umbral, dos preguntas tienen que ser del mismo tipo y tener la misma respuesta
+correcta (en los bancos hay pares casi idénticos que sólo cambian cuál opción es la
+correcta, como recorrido inorden/posorden), y sus enunciados por sí solos también
+tienen que superar el umbral (las opciones idénticas dominan la similitud de, por
+ejemplo, "complejidad de la inserción en una cola" y "… de la extracción …"). Para no
+encadenar parecidos (A≈B y B≈C no implica A≈C), se recorren las preguntas de la más
+completa a la menos completa: cada una se conserva salvo que sea similar, por encima
+del umbral, a otra ya conservada; en ese caso es su duplicado.
+
+Al eliminar, en GIFT se quita el bloque de la pregunta con sus comentarios (las
+líneas `$CATEGORY` se conservan) y en XML el `<question>` con los comentarios que lo
+preceden. Un archivo que queda sin preguntas se borra.
+"""
+from __future__ import annotations
+
+import re
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
+from questions.core.ai import Archivo, Unidad
+from questions.core.codigo import transformar_codigo
+from questions.core.gift_model import Question
+from questions.core.tree import serializar_quiz
+from questions.core.validator import GiftAnalyzer
+
+CRITERIOS = ("completa", "primera")
+
+
+@dataclass
+class Grupo:
+    conservada: Unidad
+    duplicadas: List[Tuple[Unidad, float]] = field(default_factory=list)
+
+
+def _texto_completo(q: Question) -> str:
+    partes = [q.title or "", q.stem.text if q.stem else ""]
+    partes += [c.text.text for c in q.choices if c.text]
+    for par in q.match_pairs:
+        partes += [par.subquestion.text, par.subanswer or ""]
+    return " ".join(partes)
+
+
+def _normalizar(texto: str) -> str:
+    texto = re.sub(r"<[^>]+>", " ", texto or "").lower()
+    return " ".join(re.findall(r"[0-9a-záéíóúñü]+", transformar_codigo(texto, fullwidth=False)[0]))
+
+
+def clave(q: Question):
+    """La respuesta correcta, normalizada: dos duplicados tienen que compartirla."""
+    if q.type == "TF":
+        return q.is_true
+    if q.type == "Matching":
+        return frozenset((_normalizar(p.subquestion.text), _normalizar(p.subanswer)) for p in q.match_pairs)
+    return frozenset(_normalizar(c.text.text) for c in q.choices
+                     if c.text and (c.is_correct or (c.weight or 0) > 0))
+
+
+def completitud(q: Question) -> tuple:
+    """Cuanto más alta, más conviene conservar la pregunta: feedback, título, opciones."""
+    retros = [c.feedback for c in q.choices] + [q.true_feedback, q.false_feedback]
+    return (
+        bool(q.global_feedback and q.global_feedback.text),
+        sum(1 for r in retros if r is not None and r.text),
+        bool(q.title),
+        len(q.choices) + len(q.match_pairs),
+    )
+
+
+def agrupar(unidades: List[Unidad], umbral: float, criterio: str = "completa") -> List[Grupo]:
+    """Grupos de duplicados: una pregunta conservada y las que se eliminan por ser similares a ella."""
+    analizador = GiftAnalyzer(similarity_threshold=umbral)
+    analizador.all_questions = [{"full_text": _texto_completo(u.pregunta)} for u in unidades]
+    analizador.find_duplicates()
+
+    enunciados = [frozenset(analizador._tokenize(analizador._clean_text(u.pregunta.stem.text if u.pregunta.stem else "")))
+                  for u in unidades]
+    vecinos: Dict[int, Dict[int, float]] = defaultdict(dict)
+    for d in analizador.duplicates:
+        i, j = d["index1"], d["index2"]
+        a, b = unidades[i].pregunta, unidades[j].pregunta
+        if (a.type == b.type and clave(a) == clave(b)
+                and analizador._jaccard_similarity(enunciados[i], enunciados[j]) >= umbral):
+            vecinos[i][j] = vecinos[j][i] = d["similarity"]
+
+    orden = list(range(len(unidades)))  # orden de los archivos: desempata
+    if criterio == "completa":
+        orden.sort(key=lambda i: completitud(unidades[i].pregunta), reverse=True)
+
+    conservadas: List[int] = []
+    grupos: Dict[int, Grupo] = {}
+    for i in orden:
+        if i not in vecinos:
+            continue
+        candidatas = [(vecinos[i][k], k) for k in conservadas if k in vecinos[i]]
+        if candidatas:
+            similitud, k = max(candidatas)
+            grupos.setdefault(k, Grupo(unidades[k])).duplicadas.append((unidades[i], similitud))
+        else:
+            conservadas.append(i)
+    return [grupos[k] for k in sorted(grupos)]
+
+
+def _queda_vacio(segmentos: list) -> bool:
+    """True si no queda ninguna pregunta (sólo categorías y comentarios)."""
+    for s in segmentos:
+        if isinstance(s, Unidad):
+            return False
+        if isinstance(s, str):
+            if any(linea.strip() and not linea.strip().startswith(("//", "$CATEGORY"))
+                   for linea in s.splitlines()):
+                return False
+        elif s.tag is not ET.Comment and not (s.tag == "question" and s.get("type") == "category"):
+            return False
+    return True
+
+
+def sin_eliminadas(archivo: Archivo, eliminadas: set) -> list:
+    segmentos = []
+    for s in archivo.segmentos:
+        if isinstance(s, Unidad) and id(s) in eliminadas:
+            if archivo.formato == "gift":
+                categorias = [linea for linea in s.prefijo if linea.strip().startswith("$CATEGORY")]
+                if categorias:
+                    segmentos.append("\n".join(categorias))
+            else:
+                while segmentos and getattr(segmentos[-1], "tag", None) is ET.Comment:
+                    segmentos.pop()  # los comentarios de la pregunta (`<!-- question: … -->`)
+            continue
+        segmentos.append(s)
+    return segmentos
+
+
+def escribir(archivo: Archivo, segmentos: list) -> str:
+    if archivo.formato == "gift":
+        return "\n\n".join(s.original if isinstance(s, Unidad) else s for s in segmentos) + "\n"
+    quiz = ET.Element("quiz")
+    for s in segmentos:
+        quiz.append(s.elemento if isinstance(s, Unidad) else s)
+    return serializar_quiz(quiz)
+
+
+def aplicar(archivos: List[Archivo], grupos: List[Grupo]) -> Dict[str, List[Path]]:
+    """Elimina las duplicadas de los archivos. Devuelve los archivos modificados y borrados."""
+    eliminadas = {id(u) for g in grupos for u, _ in g.duplicadas}
+    modificados, borrados = [], []
+    for archivo in archivos:
+        if not any(isinstance(s, Unidad) and id(s) in eliminadas for s in archivo.segmentos):
+            continue
+        segmentos = sin_eliminadas(archivo, eliminadas)
+        if _queda_vacio(segmentos):
+            archivo.ruta.unlink()
+            borrados.append(archivo.ruta)
+        else:
+            archivo.ruta.write_text(escribir(archivo, segmentos), encoding="utf-8")
+            modificados.append(archivo.ruta)
+    return {"modificados": modificados, "borrados": borrados}
+
+
+def plan(archivos: List[Archivo], grupos: List[Grupo]) -> Dict[str, List[Path]]:
+    """Qué archivos se modificarían y cuáles se borrarían, sin tocarlos."""
+    eliminadas = {id(u) for g in grupos for u, _ in g.duplicadas}
+    modificar, borrar = [], []
+    for archivo in archivos:
+        if any(isinstance(s, Unidad) and id(s) in eliminadas for s in archivo.segmentos):
+            (borrar if _queda_vacio(sin_eliminadas(archivo, eliminadas)) else modificar).append(archivo.ruta)
+    return {"modificados": modificar, "borrados": borrar}
+
+
+def a_json(grupos: List[Grupo]) -> List[dict]:
+    def ref(u: Unidad) -> dict:
+        return {"archivo": str(u.archivo), "titulo": u.pregunta.title, "tipo": u.pregunta.type}
+
+    return [
+        {"conserva": ref(g.conservada),
+         "elimina": [{**ref(u), "similitud": round(s, 4)} for u, s in g.duplicadas]}
+        for g in grupos
+    ]
+
+
+
+def registrar(grupos: List[Grupo], cambios: Dict[str, List[Path]], log: Path, umbral: float) -> int:
+    """Agrega al log una línea por pregunta eliminada, con las rutas completas (las categorías
+    se infieren de ellas). Formato TSV: fecha, acción, archivo eliminado, archivo conservado,
+    similitud, umbral, tipo y título. Devuelve cuántas líneas escribió."""
+    borrados = {r.resolve() for r in cambios["borrados"]}
+    fecha = datetime.now().isoformat(timespec="seconds")
+    lineas = []
+    for g in grupos:
+        for u, similitud in g.duplicadas:
+            ruta = u.archivo.resolve()
+            accion = "archivo-borrado" if ruta in borrados else "pregunta-quitada"
+            titulo = (u.pregunta.title or "").replace("\t", " ").replace("\n", " ")
+            lineas.append("\t".join([fecha, accion, str(ruta), str(g.conservada.archivo.resolve()),
+                                     f"{similitud:.4f}", f"{umbral:g}", u.pregunta.type, titulo]))
+    if lineas:
+        nuevo = not log.exists()
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a", encoding="utf-8") as f:
+            if nuevo:
+                f.write("fecha\taccion\teliminado\tconservado\tsimilitud\tumbral\ttipo\ttitulo\n")
+            f.write("\n".join(lineas) + "\n")
+    return len(lineas)
+
+
+# ---------------------------------------------------------------------------
+# Revisión manual (la usa la TUI; no depende de la interfaz)
+# ---------------------------------------------------------------------------
+
+class Revision:
+    """Decisiones sobre los grupos: cuál se conserva y cuáles se eliminan.
+
+    Empieza con la propuesta automática (se conserva la más completa y se eliminan las
+    demás). En cada grupo siempre queda al menos una pregunta: la principal no se puede
+    eliminar; para eliminarla hay que elegir otra como principal.
+    """
+
+    def __init__(self, grupos: List[Grupo]):
+        self.miembros: List[List[Unidad]] = [[g.conservada] + [u for u, _ in g.duplicadas] for g in grupos]
+        self.similitud: Dict[int, float] = {id(g.conservada): 1.0 for g in grupos}
+        for g in grupos:
+            self.similitud.update({id(u): s for u, s in g.duplicadas})
+        self.principal: List[Unidad] = [g.conservada for g in grupos]
+        self.eliminar: Dict[int, bool] = {id(u): True for g in grupos for u, _ in g.duplicadas}
+
+    def __len__(self) -> int:
+        return len(self.miembros)
+
+    def se_elimina(self, u: Unidad) -> bool:
+        return self.eliminar.get(id(u), False)
+
+    def alternar(self, grupo: int, u: Unidad) -> None:
+        if u is not self.principal[grupo]:
+            self.eliminar[id(u)] = not self.se_elimina(u)
+
+    def hacer_principal(self, grupo: int, u: Unidad) -> None:
+        """Conservar `u` en lugar de la principal actual, que pasa a eliminarse."""
+        anterior = self.principal[grupo]
+        if u is anterior:
+            return
+        self.principal[grupo] = u
+        self.eliminar[id(u)] = False
+        self.eliminar[id(anterior)] = True
+
+    def conservar_todas(self, grupo: int) -> None:
+        for u in self.miembros[grupo]:
+            self.eliminar[id(u)] = False
+
+    def a_eliminar(self, grupo: Optional[int] = None) -> int:
+        grupos = range(len(self)) if grupo is None else [grupo]
+        return sum(1 for g in grupos for u in self.miembros[g] if self.se_elimina(u))
+
+    def grupos(self) -> List[Grupo]:
+        """Los grupos tal como quedaron decididos, para `aplicar` y `registrar`."""
+        resultado = []
+        for g, miembros in enumerate(self.miembros):
+            eliminadas = [(u, self.similitud[id(u)]) for u in miembros if self.se_elimina(u)]
+            if eliminadas:
+                resultado.append(Grupo(self.principal[g], eliminadas))
+        return resultado
