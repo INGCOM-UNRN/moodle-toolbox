@@ -253,6 +253,68 @@ def _es_tag_de_clasificacion(texto: str) -> bool:
     return texto.startswith(("bloom:", "dificultad-enunciado:", "dificultad-respuestas:"))
 
 
+MANUAL = "manual"
+UMBRAL_REVISION = 0.6
+
+
+def es_manual(unidad: Unidad) -> bool:
+    """Si la clasificación vigente la corrigió una persona (no se pisa al reclasificar)."""
+    return (getattr(unidad.pregunta, "metadata", None) or {}).get("clasificador") == MANUAL
+
+
+def confianza_minima(unidad: Unidad) -> Optional[float]:
+    confianzas = (getattr(unidad.pregunta, "metadata", None) or {}).get("confianza") or []
+    return min(confianzas) if confianzas else None
+
+
+def para_revisar(unidades: List[Unidad], umbral: float = UMBRAL_REVISION, todas: bool = False) -> List[Unidad]:
+    """Preguntas clasificadas por el modelo con alguna confianza menor que `umbral` (o todas
+    las clasificadas, con `todas`), de la menos a la más confiable. Las ya corregidas a mano
+    no se vuelven a pedir."""
+    clasificadas = [u for u in unidades if u.pregunta is not None
+                    and (getattr(u.pregunta, "metadata", None) or {}).get("bloom") and not es_manual(u)]
+    if not todas:
+        clasificadas = [u for u in clasificadas if (confianza_minima(u) or 0.0) < umbral]
+    return sorted(clasificadas, key=lambda u: (confianza_minima(u) is None, confianza_minima(u) or 0.0))
+
+
+def corregida(unidad: Unidad, bloom: str, enunciado: Optional[float] = None,
+              respuestas: Optional[float] = None) -> Clasificacion:
+    """La clasificación corregida a mano: el nivel elegido y, si no se cambian, las
+    dificultades que ya tenía; confianza 1 y clasificador `manual`."""
+    if bloom not in BLOOM:
+        raise ValueError(f"Nivel de Bloom desconocido: {bloom!r}")
+    meta = getattr(unidad.pregunta, "metadata", None) or {}
+    enunciado = enunciado if enunciado is not None else meta.get("dificultad_enunciado", 3.0)
+    respuestas = respuestas if respuestas is not None else meta.get("dificultad_respuestas")
+    return Clasificacion(bloom=bloom, bloom_confianza=1.0, enunciado=float(enunciado), enunciado_confianza=1.0,
+                         respuestas=None if respuestas is None else float(respuestas),
+                         respuestas_confianza=None if respuestas is None else 1.0, modelo=MANUAL)
+
+
+def guardar_correcciones(archivos: List[Archivo], correcciones: Dict[int, Clasificacion], tags: bool = False,
+                         referencias: Optional[Path] = None, unidades: Optional[List[Unidad]] = None) -> Dict:
+    """Escribe las clasificaciones corregidas (por id de la unidad) en sus archivos y, con
+    `referencias`, las agrega al CSV de calibración. Devuelve los archivos escritos y las filas."""
+    escritos = []
+    for archivo in archivos:
+        propias = {i: c for i, c in correcciones.items()
+                   if any(isinstance(s, Unidad) and id(s) == i for s in archivo.segmentos)}
+        if propias:
+            archivo.ruta.write_text(escribir(archivo, propias, tags), encoding="utf-8")
+            escritos.append(archivo.ruta)
+    filas = 0
+    if referencias is not None:
+        por_id = {id(u): u for u in (unidades or [s for a in archivos for s in a.segmentos if isinstance(s, Unidad)])}
+        for i, c in correcciones.items():
+            u = por_id.get(i)
+            if u is None:
+                continue
+            agregar_referencia(referencias, u.archivo, (u.pregunta.title or "").strip(), c.bloom, c.enunciado, c.respuestas)
+            filas += 1
+    return {"archivos": escritos, "referencias": filas}
+
+
 def ya_clasificada(unidad: Unidad, comentario_previo: Optional[ET.Element]) -> bool:
     if unidad.formato == "gift":
         return any(MARCA in linea for linea in unidad.prefijo)
@@ -319,7 +381,8 @@ def _pendientes(archivos: List[Archivo], reclasificar: bool) -> List[Unidad]:
         anterior = None
         for s in archivo.segmentos:
             if isinstance(s, Unidad) and s.pregunta is not None:
-                if reclasificar or not ya_clasificada(s, anterior):
+                # Las correcciones manuales se respetan también al reclasificar.
+                if (reclasificar and not es_manual(s)) or not ya_clasificada(s, anterior):
                     pendientes.append(s)
             anterior = s if getattr(s, "tag", None) is ET.Comment else None
     return pendientes

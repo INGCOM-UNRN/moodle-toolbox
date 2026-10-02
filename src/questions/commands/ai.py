@@ -41,6 +41,15 @@ def ai(
     calibrar: Optional[Path] = typer.Option(
         None, "--calibrar", "--calibrate", exists=True,
         help="classify: comparar con una referencia CSV (archivo,titulo,bloom[,dificultad_enunciado,…]) sin escribir nada."),
+    revisar: bool = typer.Option(
+        False, "--revisar", "--review",
+        help="classify: revisar en una interfaz de terminal las clasificaciones con poca confianza (extra 'tui')."),
+    umbral_revision: float = typer.Option(
+        0.6, "--umbral-revision", "--review-threshold", min=0.0, max=1.0,
+        help="classify --revisar: confianza por debajo de la cual se pide revisar (con 1, todas las clasificadas)."),
+    referencias: Optional[Path] = typer.Option(
+        None, "--referencias", "--references",
+        help="classify --revisar: CSV de calibración al que se agregan las correcciones (el formato de --calibrar)."),
     opciones: int = typer.Option(4, "--opciones", "--options", help="distractors: cantidad de opciones a alcanzar por pregunta."),
     precio_entrada: Optional[float] = typer.Option(
         None, "--precio-entrada", "--input-price", help="USD por millón de tokens de entrada, para estimar el costo."),
@@ -92,6 +101,10 @@ def ai(
     file_paths = expandir_rutas(inputs, recursive)
     if not file_paths:
         fail("No se encontraron archivos .gift o .xml para procesar.")
+
+    if mode == "classify" and revisar:
+        _revisar_clasificacion(file_paths, umbral_revision, tags, referencias)
+        return
 
     if mode == "classify" and calibrar is not None:
         from questions.core.cache import Cache
@@ -156,3 +169,30 @@ def ai(
         precio_entrada=precio_entrada,
         precio_salida=precio_salida,
     )
+
+
+def _revisar_clasificacion(rutas: List[Path], umbral: float, tags: bool, referencias: Optional[Path]) -> None:
+    import contextlib
+    import io
+
+    from questions.core.ai import leer_archivos, unidades_de
+    from questions.core.clasificacion import para_revisar
+
+    try:
+        from questions.tui.clasificacion import ClasificacionApp
+    except ImportError:
+        fail('La interfaz de terminal requiere el extra opcional \'tui\': '
+             'uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"')
+    with contextlib.redirect_stdout(io.StringIO()):
+        archivos = leer_archivos(rutas)
+    unidades = para_revisar(unidades_de(archivos), umbral, todas=umbral >= 1.0)
+    if not unidades:
+        click.echo(f"No hay preguntas clasificadas con confianza menor que {umbral:g} (sin contar las corregidas a mano).")
+        return
+    resultado = ClasificacionApp(archivos, unidades, tags, referencias).run()
+    if not resultado:
+        click.echo("No se guardó nada.")
+        return
+    click.echo(f"✓ {resultado['correcciones']} correcciones guardadas en {len(resultado['archivos'])} archivos.")
+    if referencias is not None:
+        click.echo(f"  {resultado['referencias']} filas en {referencias} (usalas con --calibrar).")

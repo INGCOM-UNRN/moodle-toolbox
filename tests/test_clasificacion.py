@@ -235,3 +235,106 @@ def test_kappa():
     c = cl.Clasificacion
     perfecto = [({"bloom": b}, c(b, 1, 1, 1)) for b in ("recordar", "aplicar", "analizar")]
     assert cl.medir_concordancia(perfecto)["kappa"] == 1.0
+
+
+# --- revisión de las clasificaciones con poca confianza ----------------------
+
+_REVISAR = (
+    "// [bloom:B2-comprender] [dificultad-enunciado:2/5] [clasificacion:systemone-v1 confianza=0.41,0.9]\n"
+    "::A:: ¿Qué guarda un puntero? {=Una dirección ~Un valor ~Nada}\n\n"
+    "// [bloom:B1-recordar] [dificultad-enunciado:1/5] [clasificacion:systemone-v1 confianza=0.95,0.9]\n"
+    "::B:: ¿C es compilado? {T}\n\n"
+    "// [bloom:B3-aplicar] [dificultad-enunciado:3/5] [clasificacion:systemone-v1 confianza=0.2,0.3]\n"
+    "::C:: ¿Qué imprime? {=1 ~2 ~3}\n"
+)
+
+
+def _leer_revision(tmp_path):
+    import contextlib
+    import io
+
+    from questions.core.ai import leer_archivos, unidades_de
+
+    ruta = tmp_path / "banco.gift"
+    if not ruta.exists():
+        ruta.write_text(_REVISAR, encoding="utf-8")
+    with contextlib.redirect_stdout(io.StringIO()):
+        archivos = leer_archivos([ruta])
+    return ruta, archivos, [u for u in unidades_de(archivos) if u.pregunta]
+
+
+def test_para_revisar_corregir_y_guardar(tmp_path):
+    from questions.core.clasificacion import corregida, guardar_correcciones, leer_referencias, para_revisar
+
+    ruta, archivos, unidades = _leer_revision(tmp_path)
+    revisar = para_revisar(unidades)
+    assert [u.pregunta.title for u in revisar] == ["C", "A"]  # de la menos a la más confiable
+    assert [u.pregunta.title for u in para_revisar(unidades, todas=True)] == ["C", "A", "B"]
+
+    c = corregida(revisar[0], "analizar", 4)
+    assert (c.bloom, c.enunciado, c.modelo, c.bloom_confianza) == ("analizar", 4.0, "manual", 1.0)
+    csv = tmp_path / "referencias.csv"
+    resultado = guardar_correcciones(archivos, {id(revisar[0]): c}, referencias=csv)
+    assert resultado == {"archivos": [ruta], "referencias": 1}
+    texto = ruta.read_text(encoding="utf-8")
+    assert "// [bloom:B4-analizar] [dificultad-enunciado:4/5] [clasificacion:manual confianza=1,1]\n::C::" in texto
+    assert texto.count("[clasificacion:") == 3 and "confianza=0.2" not in texto
+    assert [(r["titulo"], r["bloom"], r["dificultad_enunciado"]) for r in leer_referencias(csv)] == [("C", "analizar", "4.0")]
+
+    # Releída, la corregida a mano ya no se pide revisar ni se reclasifica.
+    _, archivos, unidades = _leer_revision(tmp_path)
+    assert [u.pregunta.title for u in para_revisar(unidades)] == ["A"]
+    from questions.core.clasificacion import _pendientes
+
+    assert [u.pregunta.title for u in _pendientes(archivos, reclasificar=True)] == ["A", "B"]
+
+
+def test_tui_de_revision(tmp_path):
+    import asyncio
+
+    import pytest
+
+    pytest.importorskip("textual", reason="TUI: requiere el extra opcional 'tui' (uv sync --extra tui)")
+    from questions.core.clasificacion import leer_referencias, para_revisar
+    from questions.tui.clasificacion import ClasificacionApp
+
+    ruta, archivos, unidades = _leer_revision(tmp_path)
+    csv = tmp_path / "ref.csv"
+    app = ClasificacionApp(archivos, para_revisar(unidades), referencias=csv)
+
+    async def correr(teclas):
+        async with app.run_test(size=(140, 40)) as pilot:
+            for tecla in teclas:
+                await pilot.press(tecla)
+                await pilot.pause()
+        return app.return_value
+
+    # C → B5 (evaluar) y pasa sola a A; A: aceptar la del modelo; volver a C y subir la dificultad.
+    resultado = asyncio.run(correr(["5", "a", "up", "plus", "s"]))
+    assert resultado["correcciones"] == 2 and resultado["referencias"] == 2
+    texto = ruta.read_text(encoding="utf-8")
+    assert "[bloom:B5-evaluar] [dificultad-enunciado:4/5] [clasificacion:manual" in texto
+    assert "[bloom:B2-comprender] [dificultad-enunciado:2/5] [clasificacion:manual" in texto
+    assert {r["titulo"]: r["bloom"] for r in leer_referencias(csv)} == {"C": "evaluar", "A": "comprender"}
+
+
+def test_tui_de_revision_salir_no_guarda(tmp_path):
+    import asyncio
+
+    import pytest
+
+    pytest.importorskip("textual", reason="TUI: requiere el extra opcional 'tui' (uv sync --extra tui)")
+    from questions.core.clasificacion import para_revisar
+    from questions.tui.clasificacion import ClasificacionApp
+
+    ruta, archivos, unidades = _leer_revision(tmp_path)
+    app = ClasificacionApp(archivos, para_revisar(unidades))
+
+    async def correr():
+        async with app.run_test(size=(140, 40)) as pilot:
+            for tecla in ["3", "u", "4", "q"]:
+                await pilot.press(tecla)
+                await pilot.pause()
+        return app.return_value
+
+    assert asyncio.run(correr()) is None and ruta.read_text(encoding="utf-8") == _REVISAR
