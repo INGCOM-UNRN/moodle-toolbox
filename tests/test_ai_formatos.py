@@ -169,3 +169,9 @@ def test_cli_dry_run_no_necesita_clave_y_muestra_el_ahorro(tmp_path, monkeypatch
 
 def test_titulos_gift_se_desescapan():
     assert parse_gift("::C\\: punteros:: ¿Sí? {T}")["questions"][0]["title"] == "C: punteros"
+
+
+def test_xml_conserva_los_comentarios(tmp_path):
+    con_comentario = XML.replace("<quiz>", "<quiz>\n  <!-- question: 1854266 -->", 1)
+    salida = _procesar(tmp_path, "b.xml", con_comentario, Modelo())
+    assert "<!-- question: 1854266 -->" in salida

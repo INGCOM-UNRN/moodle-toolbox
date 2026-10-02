@@ -88,6 +88,7 @@ class Unidad:
     fullwidth: bool = True     # el código original usaba símbolos fullwidth
     marcas: bool = False       # el código original usaba marcas · / ↵
     forma: tuple = ()          # ver _forma
+    pregunta: Optional[Question] = None               # modelo unificado del original
     procesado: List[Question] = field(default_factory=list)
     procesado_gift: List[str] = field(default_factory=list)
 
@@ -127,6 +128,7 @@ def _leer_gift(ruta: Path) -> Archivo:
         segmentos.append(Unidad(
             archivo=ruta, formato="gift", texto=_compactar(cuerpo, "gift"), tipo=preguntas[0].type,
             original=bloque, prefijo=prefijo, fullwidth=True, marcas=marcas, forma=_forma(preguntas[0]),
+            pregunta=preguntas[0],
         ))
     return Archivo(ruta, "gift", segmentos)
 
@@ -146,9 +148,13 @@ def _compactar_pregunta(q: Question) -> Question:
 
 def _leer_xml(ruta: Path) -> Archivo:
     contenido = ruta.read_text(encoding="utf-8")
-    raiz = ET.fromstring(contenido)
+    # Con los comentarios: se conservan al escribir (p. ej. `<!-- question: 1854266 -->`).
+    raiz = ET.fromstring(contenido, parser=ET.XMLParser(target=ET.TreeBuilder(insert_comments=True)))
     segmentos: list = []
-    for elemento in raiz.findall("question"):
+    for elemento in list(raiz):
+        if elemento.tag != "question":
+            segmentos.append(elemento)
+            continue
         q = _pregunta_xml(elemento)
         if q.type not in TIPOS_PROCESABLES:
             segmentos.append(elemento)
@@ -158,6 +164,7 @@ def _leer_xml(ruta: Path) -> Archivo:
         segmentos.append(Unidad(
             archivo=ruta, formato="xml", texto=question_to_gift(_compactar_pregunta(q), escapar_codigo=False), tipo=q.type,
             original=crudo, elemento=elemento, fullwidth=fullwidth, marcas=marcas, forma=_forma(q),
+            pregunta=q,
         ))
     return Archivo(ruta, "xml", segmentos, raiz=raiz)
 
