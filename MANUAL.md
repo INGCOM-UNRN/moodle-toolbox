@@ -58,6 +58,7 @@ questions doctor
 | [`questions health`](#health) | Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces. |
 | [`questions ai`](#ai) | Procesamiento de preguntas GIFT y Moodle XML usando IA (Gemini). |
 | [`questions validate`](#validate) | Valida archivos o directorios de preguntas GIFT y Moodle XML. |
+| [`questions dedup`](#dedup) | Elimina preguntas duplicadas según un umbral de similitud (GIFT y Moodle XML), con log y revisión en TUI. |
 | [`questions format`](#format) | Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵). |
 | [`questions split`](#split) | Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales. |
 | [`questions unify`](#unify) | Unifica árboles o grupos de archivos de preguntas (GIFT o XML) en un único archivo. |
@@ -191,6 +192,35 @@ Valida archivos o directorios de preguntas GIFT y Moodle XML: errores de parseo,
 #### Ejemplo de Invocación
 ```bash
 questions validate preguntas/ -r
+```
+
+### `questions dedup`
+
+Elimina preguntas duplicadas (GIFT y Moodle XML, también entre formatos) según un umbral de similitud configurable. La similitud es la de `analyze similar` (TF-IDF + Jaccard sobre título, enunciado y respuestas), pero como el comando elimina, el criterio es conservador: dos preguntas son duplicadas sólo si son **del mismo tipo**, tienen **la misma respuesta correcta** (los bancos tienen pares casi idénticos que sólo cambian cuál opción es la correcta, como recorrido inorden/posorden) y sus **enunciados por sí solos** también superan el umbral (así no se confunden "complejidad de la inserción" con "… de la extracción" cuando las opciones son iguales).
+
+De cada grupo se conserva la más completa (feedback, título, opciones) o la primera (`--conservar primera`), y se eliminan sólo las directamente similares a ella (no se encadenan parecidos). En GIFT se quita el bloque de la pregunta con sus comentarios (las `$CATEGORY` se conservan); en XML, el `<question>` con los comentarios que lo preceden; un archivo que queda sin preguntas se borra.
+
+**Por defecto sólo simula**; `--aplicar` elimina y agrega a `--log` (TSV, `dedup.log` por defecto) una línea por pregunta eliminada: fecha, acción (`archivo-borrado` o `pregunta-quitada`), ruta completa del archivo eliminado y del conservado (las categorías se infieren de ellas), similitud, umbral, tipo y título.
+
+`--tui` abre una interfaz de terminal (extra `tui`): grupos a la izquierda y, a la derecha, la pregunta que se conserva y el duplicado en revisión lado a lado, con las palabras que difieren resaltadas. Teclas: `→`/`←` recorren los duplicados del grupo, `d` alterna eliminar/conservar, `p` conserva el duplicado en lugar de la principal, `c` conserva todo el grupo, `a` aplica (pide confirmación y escribe el log), `q` sale sin cambios.
+
+#### Opciones y Banderas
+| Opción / Banderas | Tipo | Por Defecto | Descripción |
+| :--- | :--- | :--- | :--- |
+| `--paths` | `Optional[List[pathlib.Path]]` | `None` | Archivos .gift/.xml o directorios. |
+| `-r`, `--recursive` | `<class 'bool'>` | `False` | Buscar recursivamente. |
+| `-s`, `--similarity` | `<class 'float'>` | `0.95` | Similitud mínima (0–1) para considerar dos preguntas duplicadas. |
+| `--conservar` | `<class 'str'>` | `completa` | Cuál se conserva de cada grupo: la más completa o la primera. |
+| `--aplicar` | `<class 'bool'>` | `False` | Eliminar de verdad (sin esta opción sólo se muestra lo que se eliminaría). |
+| `--log` | `<class 'pathlib.Path'>` | `dedup.log` | Con --aplicar, log (TSV, se agrega al final) de cada pregunta eliminada con las rutas completas. |
+| `--tui` | `<class 'bool'>` | `False` | Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar. |
+| `--json` | `<class 'bool'>` | `False` | Emite los grupos de duplicados como JSON versionado. |
+
+#### Ejemplo de Invocación
+```bash
+questions dedup preguntas/ -r -s 0.9
+questions dedup preguntas/ -r -s 0.9 --aplicar
+questions dedup preguntas/ -r -s 0.85 --tui
 ```
 
 ### `questions format`

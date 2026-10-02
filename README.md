@@ -62,6 +62,8 @@ otro proyecto, así que instalarlo por nombre traería un paquete ajeno.
 uv tool install git+https://github.com/INGCOM-UNRN/moodle-toolbox
 # con el editor web opcional (`questions ui`)
 uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
+# con la interfaz de terminal para revisar duplicados (`questions dedup --tui`)
+uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
 ```
 
 Para desarrollo:
@@ -83,6 +85,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions validate`: Valida archivos o directorios GIFT y Moodle XML, genera informes detallados y detecta duplicados.
 - `questions analyze stats`: Genera estadísticas completas sobre un repositorio de preguntas (por formato, tipo, categoría y tags).
 - `questions analyze similar`: Encuentra preguntas similares usando TF-IDF + Jaccard, también entre un `.gift` y un `.xml`; escala a miles de preguntas.
+- `questions dedup`: Elimina preguntas duplicadas según un umbral de similitud configurable (`-s`, por defecto 0.95), en GIFT y XML. Sólo considera duplicadas las del mismo tipo, con la misma respuesta correcta y enunciados que también superan el umbral; conserva la más completa. Simula por defecto (`--aplicar` elimina) y registra cada eliminación con la ruta completa en `dedup.log`. `--tui` abre una interfaz de terminal para revisar los grupos lado a lado y decidir cuáles eliminar (extra `tui`).
 - `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas (la correcta más larga que los distractores), código sin proteger, backticks sin cerrar, enlaces y HTML obsoleto. Separa errores de advertencias y sale con código 1 si hay errores (`--estricto`: también con advertencias).
 
 ### 2. Formateo y Corrección (GIFT y XML)
