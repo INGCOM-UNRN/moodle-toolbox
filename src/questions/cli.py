@@ -24,6 +24,7 @@ from questions.commands.tree import tree_app
 from questions.commands.ui import ui
 from questions.commands.unify import unify
 from questions.commands.validate import validate
+from questions.commands.verify import verify
 from questions.commands.xml import xml_app
 
 
@@ -73,6 +74,7 @@ app.command("health")(health_cmd)
 app.command("ai")(ai)
 app.command("validate")(validate)
 app.command("dedup")(dedup)
+app.command("verify")(verify)
 app.command("format")(format_cmd)
 app.command("split")(split)
 app.command("unify")(unify)
