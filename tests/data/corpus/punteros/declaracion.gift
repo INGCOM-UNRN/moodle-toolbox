@@ -1,0 +1,11 @@
+// [tag:c] [tag:punteros] [tag:recordar]
+// [bloom:B1-recordar] [dificultad-enunciado:1.5/5] [clasificacion:systemone-v1 confianza=0.92,0.81]
+::Qué guarda un puntero::
+[markdown]Al declarar `int *p;` en C, ¿qué guarda `p` una vez inicializado?
+{
+=La dirección de memoria de un entero #Correcto: un puntero guarda una dirección.
+~El valor del entero apuntado #Ese es *p, no p.
+~El tamaño del entero en bytes #Eso lo da sizeof(int).
+~Nada, hasta que se use malloc #Puede apuntar a cualquier variable, no sólo a memoria dinámica.
+####Un puntero es una variable cuyo valor es una dirección.
+}

@@ -1,0 +1,25 @@
+// [tag:java] [tag:poo] [tag:aplicar]
+::Constructor por defecto::
+[markdown]¿Qué imprime este código?
+```java
+public class Punto {
+    private int x;
+
+    public Punto() {
+        this(3);
+    }
+
+    public Punto(int x) {
+        this.x = x;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(new Punto().x);
+    }
+}
+```
+{
+=3 #El constructor sin parámetros delega en Punto(3).
+~0 #Ese sería el valor por omisión sin la delegación.
+~No compila #this(…) es válido como primera sentencia.
+}

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<quiz>
+  <question type="category">
+    <category><text>$course$/XML/Memoria</text></category>
+  </question>
+  <!-- question: 101 -->
+  <!-- [bloom:B3-aplicar] [dificultad-enunciado:3/5] [clasificacion:systemone-v1 confianza=0.55,0.7] -->
+  <question type="multichoice">
+    <name><text>Memoria dinámica</text></name>
+    <questiontext format="markdown">
+      <text><![CDATA[¿Qué devuelve `malloc` si no hay memoria disponible?
+```c
+int *p = malloc(sizeof(int) * n);
+if (p == NULL) {
+    return 1;
+}
+```]]></text>
+    </questiontext>
+    <generalfeedback format="markdown"><text><![CDATA[Siempre hay que comprobar el resultado de malloc.]]></text></generalfeedback>
+    <defaultgrade>1.0000000</defaultgrade>
+    <penalty>0.3333333</penalty>
+    <hidden>0</hidden>
+    <single>true</single>
+    <shuffleanswers>true</shuffleanswers>
+    <answernumbering>abc</answernumbering>
+    <answer fraction="100" format="markdown">
+      <text><![CDATA[`NULL`]]></text>
+      <feedback format="markdown"><text>Correcto.</text></feedback>
+    </answer>
+    <answer fraction="0" format="markdown">
+      <text><![CDATA[Un puntero a una zona de tamaño cero]]></text>
+      <feedback format="markdown"><text>Eso puede pasar con malloc(0), no por falta de memoria.</text></feedback>
+    </answer>
+    <answer fraction="0" format="markdown">
+      <text>Termina el programa</text>
+      <feedback format="markdown"><text>malloc no termina el programa.</text></feedback>
+    </answer>
+    <tags><tag><text>c</text></tag><tag><text>memoria</text></tag></tags>
+  </question>
+  <question type="truefalse">
+    <name><text>free dos veces</text></name>
+    <questiontext format="html"><text><![CDATA[<p>Liberar dos veces el mismo puntero con <code>free</code> es seguro.</p>]]></text></questiontext>
+    <defaultgrade>1.0000000</defaultgrade>
+    <penalty>1.0000000</penalty>
+    <answer fraction="0" format="moodle_auto_format">
+      <text>true</text>
+      <feedback format="html"><text>Es comportamiento indefinido.</text></feedback>
+    </answer>
+    <answer fraction="100" format="moodle_auto_format">
+      <text>false</text>
+      <feedback format="html"><text>Correcto.</text></feedback>
+    </answer>
+  </question>
+  <question type="shortanswer">
+    <name><text>Función de liberación</text></name>
+    <questiontext format="html"><text>¿Qué función libera la memoria pedida con malloc?</text></questiontext>
+    <answer fraction="100"><text>free</text></answer>
+  </question>
+</quiz>

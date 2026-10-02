@@ -1,0 +1,39 @@
+// [tag:c] [tag:punteros] [tag:aplicar]
+// CAT: Aritmética de punteros::
+::Avance de un puntero::
+[markdown]¿Qué imprime el siguiente programa?
+```c
+＃include ＜stdio.h＞↵
+↵
+int main（void） ｛↵
+····int v［］ ＝ ｛10, 20, 30｝；↵
+····int ＊p ＝ v；↵
+····p++；↵
+↵
+····printf（＂%d＼n＂, ＊p）；↵
+····return 0；↵
+｝
+```
+{
+    =20 #p++ avanza un entero completo.
+    ~10 #Eso imprimiría antes de incrementar.
+    ~11 #No se incrementa el valor sino la dirección.
+    ~Una dirección de memoria #Se desreferencia con *p.
+}
+
+// [tag:c] [tag:punteros] [tag:comprender]
+::Puntero nulo::
+[markdown]Desreferenciar un puntero `NULL` en C es comportamiento indefinido.
+{
+    T#Desreferenciar NULL no está definido por el estándar.#Correcto: el estándar no lo define.
+}
+
+// [tag:c] [tag:arreglos]
+::Índice y puntero::
+[markdown]Si `int v［5］；`, ¿a qué es equivalente `v［2］`?
+{
+    =*(v + 2)
+    ~*v + 2
+    ~&v[2]
+    ~v + 2
+}

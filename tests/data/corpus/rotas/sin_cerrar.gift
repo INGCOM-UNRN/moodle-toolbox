@@ -1,0 +1,12 @@
+// [tag:java]
+::Pregunta sin cerrar::
+[markdown]Esta pregunta perdió su llave de cierre al editarla.
+{
+=Una opción
+~Otra opción
+
+// [tag:java]
+// CAT: Después de una rota::
+::Pregunta sana después de la rota::
+¿Se lee esta pregunta aunque la anterior esté rota?
+{T}

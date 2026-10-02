@@ -1,0 +1,30 @@
+$CATEGORY: $course$/Java/Clases
+
+// [tag:java] [tag:poo] [tag:analizar]
+// CAT: Clases anidadas y estáticas::
+::Clase interna y referencia al contenedor::
+[markdown]Dado `class A \{ class B \{\} static class C \{\} \}`, ¿qué tiene `B` que no tiene `C`?
+{
+=Una referencia implícita a una instancia de A #Las internas no estáticas la necesitan.
+~Acceso a los miembros estáticos de A #Ambas lo tienen.
+~La posibilidad de declarar métodos #Ambas pueden.
+}
+
+// [tag:java] [tag:sintaxis]
+::Palabras clave y su uso::
+Relacioná cada palabra clave con su efecto.
+{
+=final -> No se puede reasignar ni sobrescribir
+=static -> Pertenece a la clase y no a la instancia
+=abstract -> Debe completarse en una subclase
+}
+
+// [tag:java] [tag:tipos]
+::Bits de un int::
+¿Cuántos bits ocupa un `int` en Java?
+{#32}
+
+// [tag:java] [tag:excepciones]
+::Excepción de índice::
+¿Qué excepción lanza `new int[3][5]`? Escribí sólo el nombre de la clase.
+{=ArrayIndexOutOfBoundsException =java.lang.ArrayIndexOutOfBoundsException}
