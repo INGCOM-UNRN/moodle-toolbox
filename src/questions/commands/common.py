@@ -40,3 +40,27 @@ def emitir_json(comando: str, datos: dict) -> None:
     payload = {"schema_version": SCHEMA_VERSION, "herramienta": "moodle-toolbox", "comando": comando}
     payload.update(datos)
     click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+def con_configuracion(ctx, rutas, seccion: str, valores: dict) -> dict:
+    """Completa `valores` (parámetro → valor recibido) con el .questions.toml del banco.
+
+    Sólo reemplaza los parámetros que el usuario no pasó (su valor viene del default de
+    la opción). Las claves del archivo son los nombres de los parámetros, salvo que se
+    pase `{parámetro: (valor, "clave_en_el_archivo")}`.
+    """
+    from questions.core.configuracion import cargar, valor
+
+    config = cargar(rutas or [])
+    resultado = {}
+    for parametro, dato in valores.items():
+        actual, clave = dato if isinstance(dato, tuple) else (dato, parametro)
+        fuente = ctx.get_parameter_source(parametro) if ctx is not None else None
+        # Por nombre: typer usa su propia copia de click y su ParameterSource es otra clase.
+        por_defecto = fuente is None or getattr(fuente, "name", "") in ("DEFAULT", "DEFAULT_MAP")
+        en_archivo = valor(config, seccion, clave)
+        if en_archivo is not None and por_defecto:
+            resultado[parametro] = en_archivo
+        else:
+            resultado[parametro] = actual
+    return resultado

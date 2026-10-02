@@ -8,13 +8,14 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.commands.common import LLM_OPTION, emitir_json, fail
+from questions.commands.common import LLM_OPTION, con_configuracion, emitir_json, fail
 from questions.core.ai import leer_archivos, unidades_de
 from questions.core.banco import expandir_rutas
 from questions.core.deduplicar import CRITERIOS, a_json, agrupar, aplicar, plan, registrar
 
 
 def dedup(
+    ctx: typer.Context,
     paths: Optional[List[Path]] = typer.Argument(None, exists=True, help="Archivos .gift/.xml o directorios."),
     llm: bool = LLM_OPTION,
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente."),
@@ -49,6 +50,8 @@ def dedup(
     muestra lo que haría. Al aplicar, cada eliminación queda en --log con la ruta
     completa del archivo (de ella se infieren las categorías).
     """
+    opciones = con_configuracion(ctx, paths, "dedup", {"similarity": (similarity, "umbral"), "conservar": conservar})
+    similarity, conservar = float(opciones["similarity"]), opciones["conservar"]
     archivos_rutas = expandir_rutas(paths or [Path(".")], recursive)
     if not archivos_rutas:
         fail("No se encontraron archivos de preguntas (.gift / .xml).")

@@ -24,13 +24,17 @@ def formato_de(ruta: str | Path) -> str | None:
 def buscar_archivos(directorio: str | Path, recursivo: bool = True,
                     extensiones: Iterable[str] = EXTENSIONES) -> list[Path]:
     """Archivos de preguntas del directorio, ordenados (se ignoran los ocultos)."""
+    from questions.core.configuracion import cargar, ignorado
+
     directorio = Path(directorio)
     patron = "**/*" if recursivo else "*"
     extensiones = tuple(e.lower() for e in extensiones)
+    config = cargar([directorio])  # [general] ignorar del .questions.toml del banco
     return sorted(
         p for p in directorio.glob(patron)
         if p.is_file() and p.suffix.lower() in extensiones
         and not any(parte.startswith(".") for parte in p.relative_to(directorio).parts)
+        and not ignorado(p, config)
     )
 
 

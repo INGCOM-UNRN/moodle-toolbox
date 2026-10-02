@@ -44,3 +44,48 @@ def test_hooks_de_pre_commit_ejecutan_comandos_reales(tmp_path):
         assert argumentos[0] == "questions"
         assert runner.invoke(cli, argumentos[1:] + [str(sano)]).exit_code == 0, hook
         assert runner.invoke(cli, argumentos[1:] + [str(roto)]).exit_code == 1, hook
+
+
+def _banco_con_config(tmp_path, config: str):
+    (tmp_path / ".questions.toml").write_text(config, encoding="utf-8")
+    (tmp_path / "temas").mkdir()
+    (tmp_path / "borradores").mkdir()
+    (tmp_path / "temas" / "a.gift").write_text("::A:: ¿Cuál? {=a #bien ~b #no ~c #no ####g}\n", encoding="utf-8")
+    (tmp_path / "borradores" / "b.gift").write_text("::B:: ¿Cuál? {~a ~b}\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_configuracion_ignorar_y_valores_por_defecto(tmp_path):
+    import json
+
+    raiz = _banco_con_config(tmp_path, '[general]\nignorar = ["borradores/**"]\n\n[health]\nmin_opciones = 5\n')
+    res = runner.invoke(cli, ["health", str(raiz), "-r", "--json"])
+    datos = json.loads(res.output)
+    assert datos["archivos"]["total"] == 1  # borradores/ ignorado
+    assert datos["opciones"]["minimo"] == 5
+    # La opción explícita gana sobre el archivo.
+    datos = json.loads(runner.invoke(cli, ["health", str(raiz), "-r", "--json", "--min-opciones", "2"]).output)
+    assert datos["opciones"]["minimo"] == 2
+
+
+def test_configuracion_de_dedup_y_format(tmp_path):
+    import json
+
+    raiz = _banco_con_config(tmp_path, '[dedup]\numbral = 0.5\n\n[format]\nfullwidth = true\nmarcas = false\n')
+    (raiz / "temas" / "codigo.gift").write_text("::C:: Ver\n```c\nint a = 1;\n```\n{=a ~b}\n", encoding="utf-8")
+    assert json.loads(runner.invoke(cli, ["dedup", str(raiz), "-r", "--json"]).output)["umbral"] == 0.5
+    runner.invoke(cli, ["format", str(raiz / "temas" / "codigo.gift")])
+    texto = (raiz / "temas" / "codigo.gift").read_text(encoding="utf-8")
+    assert "int a ＝ 1；\n```" in texto  # fullwidth del archivo, sin marcas
+    runner.invoke(cli, ["format", str(raiz / "temas" / "codigo.gift"), "--normal"])
+    assert "int a \\= 1;" in (raiz / "temas" / "codigo.gift").read_text(encoding="utf-8")
+    assert runner.invoke(cli, ["format", str(raiz), "--fullwidth", "--normal"]).exit_code == 1
+
+
+def test_configuracion_contexto_de_classify(tmp_path, monkeypatch):
+    import questions.core.clasificacion as cl
+
+    monkeypatch.setattr(cl, "resolver_clave", lambda: None)
+    raiz = _banco_con_config(tmp_path, '[ai]\ncontexto = "Programación 1 (C)"\n')
+    res = runner.invoke(cli, ["ai", str(raiz / "temas"), "--mode", "classify", "--dry-run"])
+    assert '"contexto": "Programación 1 (C)"' in res.output

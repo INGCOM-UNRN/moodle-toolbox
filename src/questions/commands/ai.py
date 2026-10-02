@@ -7,10 +7,11 @@ import typer
 from questions.core.ai import PROVEEDORES, cargar_cliente, modelo_por_defecto, run_global_ai_processing
 from questions.core.config import get_proveedor
 from questions.core.banco import expandir_rutas
-from questions.commands.common import LLM_OPTION, fail
+from questions.commands.common import LLM_OPTION, con_configuracion, fail
 
 
 def ai(
+    ctx: typer.Context,
     inputs: Optional[List[Path]] = typer.Argument(None, exists=True, help="Archivos .gift/.xml o directorios."),
     llm: bool = LLM_OPTION,
     mode: str = typer.Option(
@@ -64,6 +65,10 @@ def ai(
     if not inputs:
         fail("Debes proporcionar al menos una ruta de entrada.")
 
+    opciones = con_configuracion(ctx, inputs, "ai", {
+        "contexto": contexto, "proveedor": proveedor, "model": (model, "modelo"), "opciones": opciones})
+    contexto, proveedor, model, opciones = (
+        opciones["contexto"], opciones["proveedor"], opciones["model"], opciones["opciones"])
     proveedor = (proveedor or get_proveedor()).lower()
     if proveedor not in PROVEEDORES:
         fail(f"Proveedor desconocido: {proveedor} (gemini o claude).")

@@ -6,7 +6,7 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.commands.common import emitir_json, fail
+from questions.commands.common import con_configuracion, emitir_json, fail
 
 from questions.core.banco import expandir_rutas, formato_de
 from questions.core.moodle_health import (
@@ -20,6 +20,7 @@ from questions.core.moodle_health import (
 
 
 def health_cmd(
+    ctx: typer.Context,
     rutas: List[Path] = typer.Argument(..., exists=True, help="Archivos .gift/.xml o directorios."),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente en los directorios."),
     output_md: Optional[Path] = typer.Option(
@@ -46,6 +47,10 @@ def health_cmd(
     Sale con código 1 si hay errores (lo que Moodle no importaría o importaría mal);
     con --estricto, también si hay advertencias.
     """
+    opciones = con_configuracion(ctx, rutas, "health", {
+        "min_opciones": min_opciones, "umbral_longitud": umbral_longitud, "max_items": max_items})
+    min_opciones, umbral_longitud, max_items = (
+        opciones["min_opciones"], opciones["umbral_longitud"], opciones["max_items"])
     archivos = expandir_rutas(rutas, recursive)
     archivos = [a for a in archivos if formato_de(a)]
     if not archivos:

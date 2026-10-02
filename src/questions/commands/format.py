@@ -9,10 +9,11 @@ from questions.core.banco import expandir_rutas, formato_de
 from questions.core.codigo import transformar_archivo
 from questions.core.formatter import format_content
 
-from questions.commands.common import LLM_OPTION, fail
+from questions.commands.common import LLM_OPTION, con_configuracion, fail
 
 
 def format_cmd(
+    ctx: typer.Context,
     paths: Optional[List[Path]] = typer.Argument(None, exists=True),
     llm: bool = LLM_OPTION,
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
@@ -41,6 +42,11 @@ def format_cmd(
     """
     if fullwidth and normal:
         fail("--fullwidth y --normal son excluyentes.")
+    opciones = con_configuracion(ctx, paths, "format", {
+        "fullwidth": fullwidth, "marcas": marcas, "correct_first": correct_first})
+    # --normal explícito gana sobre fullwidth = true del .questions.toml.
+    fullwidth = bool(opciones["fullwidth"]) and not normal
+    marcas, correct_first = opciones["marcas"], opciones["correct_first"]
     if not paths:
         paths = [Path('.')]
 
