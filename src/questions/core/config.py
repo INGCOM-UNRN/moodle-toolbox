@@ -91,3 +91,11 @@ def save_proveedor(proveedor: str):
     if not ENV_FILE.exists():
         ENV_FILE.touch(mode=0o600)
     set_key(str(ENV_FILE), "QUESTIONS_PROVEEDOR", proveedor)
+
+
+def save_moodle_token(token: str):
+    """Guarda el MOODLE_TOKEN (servicio web, para `moodle subir`) en la configuración global."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not ENV_FILE.exists():
+        ENV_FILE.touch(mode=0o600)
+    set_key(str(ENV_FILE), "MOODLE_TOKEN", token)

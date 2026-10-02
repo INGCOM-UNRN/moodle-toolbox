@@ -15,6 +15,7 @@ from questions.commands.convert import convert_app
 from questions.commands.dedup import dedup
 from questions.commands.doctor import doctor_cmd
 from questions.commands.fix import fix_app
+from questions.commands.moodle import moodle_app
 from questions.commands.format import format_cmd
 from questions.commands.health import health_cmd
 from questions.commands.spellcheck import spellcheck
@@ -91,6 +92,7 @@ app.add_typer(fix_app, name="fix")
 app.add_typer(analyze_app, name="analyze")
 app.add_typer(tree_app, name="tree")
 app.add_typer(xml_app, name="xml")
+app.add_typer(moodle_app, name="moodle")
 
 cli = typer.main.get_command(app)
 cli.name = "questions"

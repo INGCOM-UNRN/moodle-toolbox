@@ -1,7 +1,7 @@
 import click
 import typer
 from questions.core.config import save_api_key, get_api_key, delete_api_key, save_model, get_model, save_typesafe_key
-from questions.core.config import save_anthropic_key, save_proveedor
+from questions.core.config import save_anthropic_key, save_moodle_token, save_proveedor
 from questions.core.ai import load_config, list_available_models
 
 config_app = typer.Typer(help="Configuración global de las herramientas.")
@@ -44,6 +44,12 @@ def set_provider_cmd(proveedor: str = typer.Argument(..., click_type=click.Choic
     """Configura el proveedor por defecto de `questions ai` (gemini o claude)."""
     save_proveedor(proveedor)
     click.echo(f"✅ Proveedor por defecto: {proveedor}")
+
+@config_app.command(name="set-moodle-token")
+def set_moodle_token_cmd(token: str = typer.Argument(...)):
+    """Configura el MOODLE_TOKEN del servicio web para `moodle subir`."""
+    save_moodle_token(token)
+    click.echo("✅ MOODLE_TOKEN guardado correctamente en ~/.questions/.env")
 
 @config_app.command(name="set-model")
 def set_model_cmd(model: str = typer.Argument(...)):
