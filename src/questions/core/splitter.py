@@ -63,21 +63,32 @@ def split_file(file_path: Path) -> int:
         return 0
         
     content = file_path.read_text(encoding='utf-8')
-    questions = split_gift_questions(content)
-    
-    if len(questions) <= 1:
+    bloques = split_gift_questions(content)
+
+    # Cada archivo lleva la categoría vigente, como en XML: importada sola, la
+    # pregunta cae en el mismo lugar. Los bloques que sólo declaran la categoría (o
+    # sólo tienen comentarios) no son preguntas y no generan archivo.
+    categoria = None
+    preguntas = []
+    for bloque in bloques:
+        lineas = bloque.splitlines()
+        cats = [linea.strip() for linea in lineas if linea.strip().startswith("$CATEGORY")]
+        if cats:
+            categoria = cats[-1]
+        if all(not ln.strip() or ln.strip().startswith(("$CATEGORY", "//")) for ln in lineas):
+            continue
+        preguntas.append((categoria, bloque))
+
+    if len(preguntas) <= 1:
         return 0
-        
+
     count = 0
-    for i, q in enumerate(questions):
-        title = extract_title(q)
-        if title:
-            base_name = sanitize_filename(title)
-        else:
-            base_name = f"{file_path.stem}_{i+1}"
-            
+    for i, (cat, q) in enumerate(preguntas):
+        title = extract_title(re.sub(r"(?m)^\s*(//|\$CATEGORY).*\n?", "", q))
+        base_name = sanitize_filename(title) if title else f"{file_path.stem}_{i+1}"
         new_path = _destino_libre(file_path.parent, base_name, '.gift', i + 1)
-        new_path.write_text(q + "\n", encoding='utf-8')
+        encabezado = f"{cat}\n\n" if cat and "$CATEGORY" not in q else ""
+        new_path.write_text(encabezado + q + "\n", encoding='utf-8')
         count += 1
-        
+
     return count

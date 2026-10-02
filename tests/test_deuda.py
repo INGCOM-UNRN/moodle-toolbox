@@ -126,3 +126,16 @@ def test_validate_y_analyze_salen_con_1_ante_hallazgos(tmp_path):
     assert runner.invoke(cli, ["analyze", "stats", str(tmp_path), "--json"]).exit_code == 1
     (tmp_path / "copia.gift").write_text("::A:: ¿2+2? {=4 ~3 ~5}\n", encoding="utf-8")
     assert runner.invoke(cli, ["analyze", "similar", str(tmp_path), "--json"]).exit_code == 1
+
+
+def test_split_gift_conserva_la_categoria_en_cada_archivo(tmp_path):
+    from questions.core.splitter import split_file
+
+    banco = tmp_path / "banco.gift"
+    banco.write_text("$CATEGORY: $course$/C/Punteros\n\n// [tag:p]\n::Uno:: ¿1? {T}\n\n::Dos:: ¿2? {F}\n\n"
+                     "$CATEGORY: $course$/C/Arreglos\n\n::Tres:: ¿3? {T}\n", encoding="utf-8")
+    assert split_file(banco) == 3
+    assert (tmp_path / "uno.gift").read_text(encoding="utf-8") == "$CATEGORY: $course$/C/Punteros\n\n// [tag:p]\n::Uno:: ¿1? {T}\n"
+    assert (tmp_path / "dos.gift").read_text(encoding="utf-8").startswith("$CATEGORY: $course$/C/Punteros\n\n::Dos::")
+    assert (tmp_path / "tres.gift").read_text(encoding="utf-8").startswith("$CATEGORY: $course$/C/Arreglos\n\n::Tres::")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["banco.gift", "dos.gift", "tres.gift", "uno.gift"]
