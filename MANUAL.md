@@ -129,12 +129,30 @@ Procesa preguntas GIFT y Moodle XML con Gemini (`improve`, `multiply` o `transfo
 
 En los bancos de la cátedra, lo enviado es un 47 % más corto que los archivos XML y un 7 % más corto que los GIFT.
 
+#### Clasificación con Jev (`--mode classify`)
+
+Usa **Jev** ([TypeSafe](https://docs.typesafe.ai), modelo *System One*) en lugar de Gemini: por pregunta, una sola solicitud con tres juicios tipados que corren en paralelo.
+
+| Juicio | Tipo | Resultado |
+| :-- | :-- | :-- |
+| Nivel de Bloom | `choice` entre los 6 niveles de la taxonomía revisada | `B1-recordar` … `B6-crear` |
+| Dificultad del enunciado | `score` de 5 niveles descritos como situaciones | 1–5 (con un decimal) |
+| Dificultad de las respuestas (cuán difícil es distinguir la correcta de los distractores) | `score` de 5 niveles; sólo opción múltiple y emparejamiento | 1–5 |
+
+Jev recibe la pregunta como JSON (contexto del curso, tipo, enunciado y opciones con la correcta marcada; el código en ASCII y **sin** la retroalimentación, que revelaría la respuesta). El resultado se agrega como comentario: en GIFT una línea antes del título y en XML un `<!-- … -->` antes del `<question>`:
+
+```text
+// [bloom:B3-aplicar] [dificultad-enunciado:3.7/5] [dificultad-respuestas:3.7/5] [clasificacion:jev-1.13.0 confianza=1,0.74,0.71]
+```
+
+Las preguntas ya clasificadas se saltean (`--reclasificar` las reemplaza, sin duplicar la línea); `--tags` agrega además los tags de Moodle `bloom:…`, `dificultad-enunciado:N` y `dificultad-respuestas:N`, que se conservan al importar y permiten filtrar el banco. Al terminar informa la distribución de Bloom, las dificultades medias, cuántas preguntas tuvieron baja confianza y los tokens usados (≈1300 de entrada por pregunta). La clave `TYPESAFE_API_KEY` se toma del entorno, de `.env.local`, de `~/.env` o de `questions config set-typesafe-key`.
+
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
 | `--inputs` | `Optional[List[pathlib.Path]]` | `None` | Archivos .gift/.xml o directorios. |
 | `--llm` | `<class 'bool'>` | `False` | Muestra instrucciones para un LLM sobre este comando. |
-| `--mode` | `<class 'str'>` | `improve` | Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado). |
+| `--mode` | `<class 'str'>` | `improve` | Modo: improve (mejorar), multiply (variaciones), transform (usar prompt personalizado) o classify (Bloom y dificultad con Jev). |
 | `--prompt` | `Optional[str]` | `None` | Prompt personalizado o ruta a un archivo .txt con el prompt. |
 | `--output` | `Optional[pathlib.Path]` | `None` | Directorio de salida (por defecto: output_<mode>). |
 | `--model` | `Optional[str]` | `None` | Modelo de Gemini (default: configurado o gemini-2.0-flash). |
@@ -143,11 +161,16 @@ En los bancos de la cátedra, lo enviado es un 47 % más corto que los archivos 
 | `-i`, `--in-place` | `<class 'bool'>` | `False` | Escribir en la misma carpeta que el original. |
 | `--suffix` | `Optional[str]` | `None` | Sufijo para los nuevos archivos (usado con --in-place, ej: -ia). |
 | `-n`, `--dry-run` | `<class 'bool'>` | `False` | Mostrar lo que se enviaría (y cuánto se ahorra) sin llamar al modelo ni escribir archivos. |
+| `--contexto` | `Optional[str]` | `None` | classify: curso y nivel de los estudiantes (calibra Bloom y dificultad). |
+| `--concurrencia` | `<class 'int'>` | `4` | classify: solicitudes simultáneas a Jev. |
+| `--reclasificar` | `<class 'bool'>` | `False` | classify: volver a clasificar las ya clasificadas. |
+| `--tags` | `<class 'bool'>` | `False` | classify: escribir también tags de Moodle (bloom:…, dificultad-…). |
 
 #### Ejemplo de Invocación
 ```bash
 questions ai banco.xml --dry-run
 questions ai preguntas/ -r --mode multiply --output variaciones/
+questions ai preguntas/ -r --mode classify -i --tags --contexto "Programación 1 (C), primer año"
 ```
 
 ### `questions validate`

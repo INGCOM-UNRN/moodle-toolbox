@@ -13,6 +13,7 @@ versiones según [SemVer](https://semver.org/lang/es/).
 - **format**: formatea Moodle XML (sangría, CDATA, comentarios) y `--correct-first` ordena por porcentaje en ambos formatos; `--fullwidth` agrega las marcas `·` (indentación) y `↵` (fin de línea), con `--sin-marcas` para omitirlas.
 - **split**: divide archivos Moodle XML (un archivo por pregunta, con su categoría).
 - **ai**: procesa GIFT y Moodle XML. El modelo recibe GIFT compacto (sin comentarios, categorías, estructura XML ni marcas `·`/`↵`, con el código en ASCII) y la respuesta se aplica sobre el original: en XML se conservan penalización, tags, `idnumber` y formatos. Valida cada respuesta (GIFT válido, mismo tipo y, en `improve`, misma cantidad de opciones) y si no, conserva el original. `--dry-run` muestra el prompt y el ahorro sin llamar a la API.
+- **ai --mode classify**: clasifica cada pregunta (GIFT o XML) con Jev de TypeSafe: nivel de Bloom (choice B1–B6) y dificultad del enunciado y de las respuestas (scores 1–5), en una solicitud por pregunta sin la retroalimentación. Escribe un comentario por pregunta (`// [bloom:B3-aplicar] [dificultad-enunciado:3.7/5] …` o `<!-- … -->`), saltea las ya clasificadas salvo `--reclasificar`, `--tags` agrega tags de Moodle y `config set-typesafe-key` guarda la clave.
 - **health**: separa errores (lo que Moodle no importaría o importaría mal) de advertencias; sale con código 1 si hay errores y `--estricto` también falla con advertencias.
 - **código**: un único módulo (`questions.core.codigo`) para fullwidth y marcas en GIFT y XML, con la forma normal de GIFT escapada y las variantes históricas (U+2007, U+037E) llevadas a `·` y `；`.
 
@@ -26,6 +27,7 @@ versiones según [SemVer](https://semver.org/lang/es/).
 - **validate --json**: el progreso del escaneo de directorios ya no ensucia la salida.
 - **health**: salía siempre con código 0; un banco vacío mostraba 100 % de cobertura; un directorio sin `-r` fallaba sin sugerir la opción.
 - **ai**: con `--output`, los archivos de carpetas distintas con el mismo nombre se pisaban; los separadores `---` cortaban preguntas que los contenían.
+- **ai**: los comentarios del XML (`<!-- question: … -->`) se perdían al escribir.
 - **parser**: los títulos GIFT se desescapan (`::C\\: punteros::`).
 - **analyze similar**: filtrado por prefijos exacto; un repositorio de 10 mil preguntas pasa de más de una hora a segundos.
 

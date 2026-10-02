@@ -112,6 +112,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 
 ### 7. Inteligencia Artificial (Gemini)
 - `questions ai`: Mejora la calidad pedagógica (`improve`) o crea variaciones (`multiply`) de preguntas GIFT y Moodle XML usando modelos de Google Gemini. El modelo recibe GIFT compacto (sin metadatos ni marcas, código en ASCII) y la respuesta se aplica sobre el archivo original; `--dry-run` muestra lo que se enviaría y cuánto se ahorra.
+- `questions ai --mode classify`: Clasifica cada pregunta con Jev (TypeSafe): nivel de Bloom (B1–B6) y dificultad (1–5) del enunciado y de las respuestas, escritos como comentario en GIFT y XML (y como tags de Moodle con `--tags`). Requiere `TYPESAFE_API_KEY`.
 
 ## 📚 Documentación Detallada
 
