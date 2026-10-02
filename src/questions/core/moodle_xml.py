@@ -38,6 +38,9 @@ _TIPOS = {
 }
 
 
+CAMPOS_MOODLE = ("penalty", "defaultgrade", "shuffleanswers", "answernumbering", "single")
+
+
 def _texto(el: ET.Element | None, ruta: str = "text") -> str:
     if el is None:
         return ""
@@ -94,6 +97,8 @@ def _pregunta(q: ET.Element) -> Question:
         tags=tags,
         global_feedback=_formateado(q.find("generalfeedback")),
     )
+
+    pregunta.moodle = {campo: _texto(q, campo) for campo in CAMPOS_MOODLE if _texto(q, campo)}
 
     respuestas = q.findall("answer")
     if qtype == "multichoice":

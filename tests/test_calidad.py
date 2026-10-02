@@ -39,3 +39,31 @@ def test_health_clasificacion_y_blueprint(tmp_path):
     assert any(a["clave"] == "sin_niveles_altos" for a in res["resumen"]["advertencias"])
     reporte = generar_reporte_markdown(res, "banco")
     assert "## Clasificación (Bloom y dificultad)" in reporte and "| C/Punteros | 3 | 2 | · | · | · | · | 5 |" in reporte
+
+
+def test_health_redaccion():
+    from questions.core.moodle_health import auditar_redaccion
+    from questions.core.parser import parse_gift as p
+
+    gift = (
+        "::A:: ¿Cuál es correcta? {=uno ~dos ~Todas las anteriores}\n\n"
+        "::B:: ¿Cuál de estas NO es válida? {=a ~b ~c}\n\n"
+        "::C:: ¿Cuál de estas no es válida? {=a ~b ~c}\n\n"
+        "::D:: ¿Cuál es **incorrecta**? {~a =b ~c}\n\n"
+        "::E:: Defina puntero {=Una variable que guarda la dirección de memoria de otra ~x ~y}\n"
+    )
+    res = auditar_redaccion(p(gift)["questions"])
+    assert res["preguntas_revisadas"] == 5
+    assert res["posicion_correcta"] == {"1": 4, "2": 1} and res["correcta_primera"] == 4
+    assert [i["titulo"] for i in res["preguntas_opciones_problematicas"]] == ["A"]
+    assert [(i["titulo"], i["negaciones"]) for i in res["preguntas_negacion_sin_resaltar"]] == [("C", ["no es"])]
+    assert [i["titulo"] for i in res["preguntas_distractores_debiles"]] == ["E"]
+
+
+def test_moodle_xml_expone_los_campos_de_moodle():
+    from questions.core.moodle_xml import parse_xml
+
+    xml = ('<quiz><question type="multichoice"><name><text>x</text></name><questiontext><text>q</text></questiontext>'
+           '<penalty>0.3333333</penalty><defaultgrade>1</defaultgrade><shuffleanswers>0</shuffleanswers>'
+           '<answer fraction="100"><text>a</text></answer></question></quiz>')
+    assert parse_xml(xml)["questions"][0]["moodle"] == {"penalty": "0.3333333", "defaultgrade": "1", "shuffleanswers": "0"}

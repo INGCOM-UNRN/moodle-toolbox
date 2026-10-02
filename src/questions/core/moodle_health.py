@@ -257,6 +257,70 @@ def _backticks_desbalanceados(texto: str) -> bool:
     return texto.count("```") % 2 == 1 or texto.replace("```", "").count("`") % 2 == 1
 
 
+_OPCION_PROBLEMATICA = re.compile(
+    r"\b(todas las (anteriores|opciones( anteriores)?)|ninguna de las (anteriores|opciones)|ambas( son correctas)?"
+    r"|las dos anteriores|[a-e] y [a-e]|all of the above|none of the above)\b", re.I)
+_NEGACION = re.compile(
+    r"\b(excepto|salvo|incorrect[ao]s?|fals[ao]s?|no\s+(?:es|son|corresponde|pertenece|representa|debe|puede|se))\b",
+    re.I)
+_RESALTADO = re.compile(r"\*\*[^*]+\*\*|__[^_]+__|<(strong|b|em|u)>.*?</\1>", re.I | re.S)
+
+
+def _sin_resaltar(enunciado: str) -> List[str]:
+    """Negaciones del enunciado escritas en minúscula y fuera de un resaltado."""
+    resaltados = [m.span() for m in _RESALTADO.finditer(enunciado)]
+    hallazgos = []
+    for m in _NEGACION.finditer(enunciado):
+        dentro = any(a <= m.start() and m.end() <= b for a, b in resaltados)
+        palabra = m.group(0).split()[0]  # "NO es": lo resaltado es la negación
+        if not dentro and palabra != palabra.upper():
+            hallazgos.append(m.group(0))
+    return hallazgos
+
+
+def auditar_redaccion(preguntas: Iterable[dict]) -> Dict[str, Any]:
+    """Señales de redacción de opción múltiple: posición de la correcta, opciones del tipo
+    "todas las anteriores", negaciones sin resaltar y distractores mucho más cortos."""
+    posiciones: Counter = Counter()
+    esperado_primera = 0.0
+    revisadas = sin_mezclar = 0
+    problematicas, negativas, debiles = [], [], []
+    for p in preguntas:
+        if p.get("type") not in ("MC", "Short"):
+            continue
+        opciones = p.get("choices", [])
+        textos = [_plano(_texto(o.get("text"))) for o in opciones]
+        if p.get("type") == "MC" and opciones:
+            revisadas += 1
+            if str((p.get("moodle") or {}).get("shuffleanswers", "")).lower() in ("0", "false"):
+                sin_mezclar += 1
+            correctas = [i for i, o in enumerate(opciones) if _fraccion(o) >= 99.99]
+            if len(correctas) == 1:
+                posiciones[correctas[0] + 1] += 1
+                esperado_primera += 1 / len(opciones)
+            raras = sorted({m.group(0).lower() for t in textos for m in [_OPCION_PROBLEMATICA.search(t)] if m})
+            if raras:
+                problematicas.append({**_ref(p), "opciones": raras})
+            largos = [(len(t), _fraccion(o)) for t, o in zip(textos, opciones)]
+            correcta = max((n for n, f in largos if f > 0), default=0)
+            cortos = [n for n, f in largos if f <= 0 and correcta >= 20 and n < 0.25 * correcta]
+            if cortos:
+                debiles.append({**_ref(p), "distractores": len(cortos), "largo_correcta": correcta})
+        negaciones = _sin_resaltar(_texto(p.get("stem")))
+        if negaciones:
+            negativas.append({**_ref(p), "negaciones": sorted(set(n.lower() for n in negaciones))})
+    return {
+        "preguntas_revisadas": revisadas,
+        "posicion_correcta": {str(k): v for k, v in sorted(posiciones.items())},
+        "correcta_primera": posiciones.get(1, 0),
+        "correcta_primera_esperado": round(esperado_primera, 1),
+        "sin_mezclar_opciones": sin_mezclar,
+        "preguntas_opciones_problematicas": problematicas,
+        "preguntas_negacion_sin_resaltar": negativas,
+        "preguntas_distractores_debiles": debiles,
+    }
+
+
 def auditar_estructura(preguntas: Iterable[dict]) -> Dict[str, Any]:
     """Preguntas sin título o sin enunciado, código sin cerrar y conteo por tipo."""
     por_tipo: Counter = Counter()
@@ -429,6 +493,7 @@ def auditar_preguntas(
         "opciones": auditar_opciones(preguntas, min_opciones),
         "longitud": auditar_longitudes(preguntas, umbral_longitud),
         "clasificacion": auditar_clasificacion(preguntas),
+        "redaccion": auditar_redaccion(preguntas),
     }
 
 
@@ -534,6 +599,12 @@ def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
         ("correcta_mas_corta", "preguntas donde la correcta es notablemente más corta", len(lon["preguntas_correcta_mas_corta"])),
         ("codigo_sin_cerrar", "preguntas con un ` o ``` sin cerrar", len(est["preguntas_codigo_sin_cerrar"])),
         ("sin_titulo", "preguntas sin título", len(est["preguntas_sin_titulo"])),
+        ("opciones_problematicas", "preguntas con opciones como «todas/ninguna de las anteriores»",
+         len(resultado.get("redaccion", {}).get("preguntas_opciones_problematicas", []))),
+        ("negacion_sin_resaltar", "enunciados con una negación sin resaltar (excepto, incorrecta, no es…)",
+         len(resultado.get("redaccion", {}).get("preguntas_negacion_sin_resaltar", []))),
+        ("distractores_debiles", "preguntas con distractores mucho más cortos que la correcta",
+         len(resultado.get("redaccion", {}).get("preguntas_distractores_debiles", []))),
         ("sin_niveles_altos", "categorías sin preguntas de B4–B6 (analizar, evaluar, crear)",
          len(resultado.get("clasificacion", {}).get("categorias_sin_niveles_altos", []))),
         ("codigo_xml_sin_proteger", "archivos XML con código sin proteger (se rompería al pasar a GIFT)",
@@ -716,6 +787,28 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
             _lista(lineas, sorted(lon[clave], key=lambda i: -abs(i["razon"] - 1)),
                    lambda i: f"{i['titulo']} (×{i['razon']:g}: {i['largo_correcta']:g} vs {i['largo_distractores']:g} caracteres)",
                    max_items)
+
+    red = resultado.get("redaccion")
+    if red and red["preguntas_revisadas"]:
+        lineas.append("## Redacción")
+        lineas.append(f"- La correcta es la primera opción en {red['correcta_primera']} preguntas "
+                      f"(por azar se esperarían ≈{red['correcta_primera_esperado']:g}); importa si no se mezclan "
+                      f"las opciones ({red['sin_mezclar_opciones']} preguntas XML con shuffleanswers en falso) "
+                      "o en exámenes impresos")
+        if red["posicion_correcta"]:
+            lineas.append("- Posición de la correcta: " + ", ".join(f"{k}.ª {v}" for k, v in red["posicion_correcta"].items()))
+        lineas.append("")
+        for clave, titulo, formato in (
+            ("preguntas_opciones_problematicas", "Opciones «todas/ninguna de las anteriores» (se rompen al mezclar)",
+             lambda i: f"{i['titulo']} ({', '.join(i['opciones'])})"),
+            ("preguntas_negacion_sin_resaltar", "Negaciones sin resaltar en el enunciado",
+             lambda i: f"{i['titulo']} ({', '.join(i['negaciones'])})"),
+            ("preguntas_distractores_debiles", "Distractores mucho más cortos que la correcta (menos del 25 %)",
+             lambda i: f"{i['titulo']} ({i['distractores']} distractores; correcta de {i['largo_correcta']} caracteres)"),
+        ):
+            if red[clave]:
+                lineas.append(f"### {titulo} ({len(red[clave])})")
+                _lista(lineas, red[clave], formato, max_items)
 
     cla = resultado.get("clasificacion")
     if cla and cla["clasificadas"]:

@@ -7,7 +7,7 @@ from enum import Enum
 
 # Versión del contrato de datos GIFT que consumen otras herramientas (scorm-tools
 # `from-gift`). Subir la mayor si cambia la forma del dict de `parse_gift`.
-GIFT_CONTRACT_VERSION = "1.1.0"  # 1.0.1: retro de V/F en el orden de Moodle; 1.1.0: clave metadata
+GIFT_CONTRACT_VERSION = "1.1.0"  # 1.0.1: retro de V/F en el orden de Moodle; 1.1.0: claves metadata y moodle
 
 
 class QuestionType(Enum):
@@ -68,6 +68,8 @@ class Question:
     false_feedback: Optional[FormattedText] = None
     # Clasificación leída de comentarios o tags (bloom, dificultad_enunciado, …).
     metadata: dict = field(default_factory=dict)
+    # Sólo desde Moodle XML: penalty, defaultgrade, shuffleanswers, answernumbering, single.
+    moodle: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         """Convert to dictionary, excluding None values and empty lists."""
@@ -100,4 +102,6 @@ class Question:
             result["falseFeedback"] = asdict(self.false_feedback)
         if self.metadata:
             result["metadata"] = dict(self.metadata)
+        if self.moodle:
+            result["moodle"] = dict(self.moodle)
         return result
