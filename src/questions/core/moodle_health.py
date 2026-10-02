@@ -428,13 +428,67 @@ def auditar_archivos(
     enlaces["todas_validas"] = not enlaces["urls_sospechosas"]
     codigo["archivos"] = archivos_codigo
     formatos = sorted(por_formato)
-    return {
+    resultado = {
         "formato": formatos[0] if len(formatos) == 1 else ("mixto" if formatos else None),
         "archivos": {"total": len(archivos), "por_formato": dict(por_formato), "errores": errores},
         **auditar_preguntas(preguntas, min_opciones, umbral_longitud),
         "codigo": codigo,
         "enlaces": enlaces,
         "html_obsoleto": html_obsoleto,
+    }
+    resultado["resumen"] = resumir_hallazgos(resultado)
+    return resultado
+
+
+def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
+    """Separa los hallazgos en errores y advertencias.
+
+    Errores: lo que hace que Moodle no importe la pregunta, la importe partida o la
+    califique mal (archivos ilegibles, claves de corrección inválidas, preguntas sin
+    enunciado, código que rompe un archivo GIFT). Advertencias: calidad pedagógica e
+    higiene (feedback, opciones, longitud, enlaces, HTML, código XML sin proteger).
+    """
+    est, pct, fb = resultado["estructura"], resultado["porcentajes"], resultado["retroalimentacion"]
+    opc, lon, cod = resultado["opciones"], resultado["longitud"], resultado["codigo"]
+    codigo_gift = [a for a in cod["archivos"] if formato_de(a["archivo"]) == "gift"]
+    codigo_xml = [a for a in cod["archivos"] if formato_de(a["archivo"]) != "gift"]
+
+    def items(*pares):
+        return [{"clave": clave, "descripcion": desc, "cantidad": n} for clave, desc, n in pares if n]
+
+    errores = items(
+        ("archivos_ilegibles", "archivos que no se pudieron interpretar", len(resultado["archivos"]["errores"])),
+        ("fracciones_invalidas", "preguntas con porcentajes que Moodle rechaza al importar", len(pct["fracciones_invalidas"])),
+        ("porcentajes_inconsistentes", "preguntas cuyos porcentajes no suman 100 %", len(pct["preguntas_inconsistentes"])),
+        ("sin_correcta", "preguntas sin ninguna respuesta con puntaje positivo", len(pct["preguntas_sin_correcta"])),
+        ("sin_enunciado", "preguntas sin enunciado (en GIFT, suele ser una línea en blanco antes de `{`)",
+         len(est["preguntas_sin_enunciado"])),
+        ("codigo_gift_sin_proteger", "archivos GIFT con código que GIFT interpreta (sin fullwidth ni escape)",
+         sum(1 for a in codigo_gift if a["sin_proteger"])),
+        ("codigo_gift_lineas_vacias", "archivos GIFT con líneas en blanco dentro del código (cortan la pregunta)",
+         sum(1 for a in codigo_gift if a["lineas_vacias"])),
+    )
+    advertencias = items(
+        ("sin_feedback", "preguntas sin ningún feedback", fb["sin_feedback_count"]),
+        ("feedback_parcial", "preguntas con feedback en sólo algunas opciones", len(fb["preguntas_feedback_parcial"])),
+        ("pocas_opciones", "preguntas con menos opciones de las recomendadas", len(opc["preguntas_pocas_opciones"])),
+        ("opciones_repetidas", "preguntas que repiten una opción", len(opc["preguntas_opciones_repetidas"])),
+        ("correcta_mas_larga", "preguntas donde la correcta es notablemente más larga", len(lon["preguntas_correcta_mas_larga"])),
+        ("correcta_mas_corta", "preguntas donde la correcta es notablemente más corta", len(lon["preguntas_correcta_mas_corta"])),
+        ("codigo_sin_cerrar", "preguntas con un ` o ``` sin cerrar", len(est["preguntas_codigo_sin_cerrar"])),
+        ("sin_titulo", "preguntas sin título", len(est["preguntas_sin_titulo"])),
+        ("codigo_xml_sin_proteger", "archivos XML con código sin proteger (se rompería al pasar a GIFT)",
+         sum(1 for a in codigo_xml if a["sin_proteger"] or a["lineas_vacias"])),
+        ("marcas_no_canonicas", "archivos con marcas no canónicas en el código", sum(1 for a in cod["archivos"] if a["variantes"])),
+        ("enlaces_sospechosos", "enlaces http:// o locales", len(resultado["enlaces"]["urls_sospechosas"])),
+        ("html_obsoleto", "archivos con HTML obsoleto", len(resultado["html_obsoleto"])),
+    )
+    return {
+        "ok": not errores,
+        "errores": errores,
+        "advertencias": advertencias,
+        "total_errores": sum(e["cantidad"] for e in errores),
+        "total_advertencias": sum(a["cantidad"] for a in advertencias),
     }
 
 
@@ -516,14 +570,27 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
 
     lineas = [f"# 🏥 Informe de Salud del Banco de Preguntas: `{nombre}`\n"]
 
+    resumen = resultado.get("resumen") or resumir_hallazgos(resultado)
+    lineas.append("## Resultado")
+    if resumen["ok"]:
+        lineas.append(f"✅ Sin errores · {resumen['total_advertencias']} advertencias\n")
+    else:
+        lineas.append(f"❌ {resumen['total_errores']} errores · {resumen['total_advertencias']} advertencias\n")
+    for etiqueta, grupo in (("Error", resumen["errores"]), ("Advertencia", resumen["advertencias"])):
+        lineas.extend(f"- **{etiqueta}:** {h['cantidad']} {h['descripcion']}" for h in grupo)
+    if resumen["errores"] or resumen["advertencias"]:
+        lineas.append("")
+
     lineas.append("## Estadísticas Generales")
     formatos = " · ".join(f"{k.upper()}: {v}" for k, v in sorted(arch["por_formato"].items()))
     lineas.append(f"- **Archivos:** {arch['total']} ({formatos})" if formatos else f"- **Archivos:** {arch['total']}")
-    lineas.append(f"- **Total Preguntas Evaluadas:** {total}")
+    lineas.append(f"- **Preguntas:** {total} ({fb['total_preguntas']} con respuestas; "
+                  "las descripciones y cloze no se evalúan)")
     if est["por_tipo"]:
         lineas.append("- **Por tipo:** " + ", ".join(f"{t} {n}" for t, n in est["por_tipo"].items()))
-    lineas.append(f"- **Cobertura de Feedback:** {fb['porcentaje_cobertura']}% ({fb['sin_feedback_count']} sin explicación)")
-    lineas.append(f"- **Opciones con feedback:** {fb['porcentaje_opciones_con_feedback']}% "
+    lineas.append(f"- **Cobertura de Feedback:** {_pct(fb['total_preguntas'] - fb['sin_feedback_count'], fb['total_preguntas'])} "
+                  f"({fb['sin_feedback_count']} sin explicación)")
+    lineas.append(f"- **Opciones con feedback:** {_pct(fb['opciones_con_feedback'], fb['opciones_total'])} "
                   f"({fb['opciones_con_feedback']} de {fb['opciones_total']})")
     lineas.append(f"- **Enlaces Sospechosos / HTTP:** {len(enl['urls_sospechosas'])}\n")
     if arch["errores"]:
@@ -548,7 +615,7 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
 
     lineas.append("## Retroalimentación")
     lineas.append(f"- Con feedback general: {fb['con_feedback_global']} de {fb['total_preguntas']} "
-                  f"({fb['porcentaje_feedback_global']}%)")
+                  f"({_pct(fb['con_feedback_global'], fb['total_preguntas'])})")
     lineas.append(f"- Sin ningún feedback: {fb['sin_feedback_count']}")
     lineas.append(f"- Con feedback en sólo algunas opciones: {len(fb['preguntas_feedback_parcial'])}\n")
     if fb["preguntas_sin_feedback"]:

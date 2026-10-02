@@ -138,8 +138,11 @@ def test_cli_health_directorio_mixto_json(tmp_path):
     (tmp_path / "sub").mkdir()
     (tmp_path / "sub" / "b.xml").write_text(gift_to_xml(BANCO), encoding="utf-8")
     res = runner.invoke(cli, ["health", str(tmp_path), "-r", "--json"])
-    assert res.exit_code == 0, res.output
+    assert res.exit_code == 1, res.output  # BANCO tiene porcentajes que Moodle rechaza
     datos = json.loads(res.output)
+    assert datos["ok"] is False
+    claves = {e["clave"]: e["cantidad"] for e in datos["resumen"]["errores"]}
+    assert claves == {"fracciones_invalidas": 2}
     assert datos["formato"] == "mixto"
     assert datos["archivos"]["por_formato"] == {"gift": 1, "xml": 1}
     assert datos["estructura"]["total_preguntas"] == 14
@@ -151,6 +154,43 @@ def test_cli_health_md_y_opciones(tmp_path):
     banco.write_text(gift_to_xml(BANCO), encoding="utf-8")
     salida = tmp_path / "salud.md"
     res = runner.invoke(cli, ["health", str(banco), "--md", str(salida), "--min-opciones", "5"])
-    assert res.exit_code == 0, res.output
+    assert res.exit_code == 1, res.output
+    assert "❌ 1 errores" in res.output
     texto = salida.read_text(encoding="utf-8")
     assert "`a.xml`" in texto and "opción múltiple: 5" in texto
+    assert "## Resultado" in texto and "**Error:** 1 preguntas con porcentajes que Moodle rechaza" in texto
+
+
+def test_cli_health_codigos_de_salida(tmp_path):
+    sano = tmp_path / "sano.gift"
+    sano.write_text("::P:: ¿Cuál? {=a #bien ~b #mal ~c #mal}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["health", str(sano)])
+    assert res.exit_code == 0, res.output
+    assert "✅ Sin errores" in res.output
+    # Sin feedback general es sólo una advertencia: falla únicamente con --estricto.
+    con_advertencia = tmp_path / "adv.gift"
+    con_advertencia.write_text("::P:: ¿Cuál? {=a ~b ~c}\n", encoding="utf-8")
+    assert runner.invoke(cli, ["health", str(con_advertencia)]).exit_code == 0
+    assert runner.invoke(cli, ["health", str(con_advertencia), "--estricto"]).exit_code == 1
+    # Una línea en blanco en el código de un GIFT corta la pregunta: es un error.
+    roto = tmp_path / "roto.gift"
+    roto.write_text("::P:: Ver\n```c\nint a;\n\nint b;\n```\n{=a ~b ~c}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["health", str(roto), "--json"])
+    assert res.exit_code == 1
+    claves = {e["clave"] for e in json.loads(res.output)["resumen"]["errores"]}
+    assert "codigo_gift_lineas_vacias" in claves
+
+
+def test_cli_health_directorio_sin_r_sugiere_recursivo(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "a.gift").write_text("::P:: Q {=a ~b ~c}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["health", str(tmp_path)])
+    assert res.exit_code == 1
+    assert "usá -r" in res.output
+
+
+def test_reporte_de_banco_vacio_no_inventa_porcentajes(tmp_path):
+    vacio = tmp_path / "v.xml"
+    vacio.write_text("<quiz></quiz>", encoding="utf-8")
+    reporte = generar_reporte_markdown(auditar_archivos([vacio]), "v.xml")
+    assert "**Cobertura de Feedback:** — (0 sin explicación)" in reporte

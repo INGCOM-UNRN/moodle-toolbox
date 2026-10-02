@@ -35,13 +35,21 @@ def health_cmd(
         help="Razón de largo correcta/distractores a partir de la cual se advierte.",
     ),
     max_items: int = typer.Option(50, "--max-items", help="Máximo de preguntas listadas por sección (0: todas)."),
+    estricto: bool = typer.Option(False, "--estricto", help="Salir con código 1 también ante advertencias."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
-    """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces."""
+    """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces.
+
+    Sale con código 1 si hay errores (lo que Moodle no importaría o importaría mal);
+    con --estricto, también si hay advertencias.
+    """
     archivos = expandir_rutas(rutas, recursive)
     archivos = [a for a in archivos if formato_de(a)]
     if not archivos:
-        fail("No se encontraron archivos de preguntas (.gift / .xml).")
+        sugerencia = ""
+        if not recursive and any(r.is_dir() and expandir_rutas([r], True) for r in rutas):
+            sugerencia = " Hay preguntas en subdirectorios: usá -r para recorrerlos."
+        fail(f"No se encontraron archivos de preguntas (.gift / .xml).{sugerencia}")
 
     if clean_html:
         for archivo in archivos:
@@ -59,7 +67,9 @@ def health_cmd(
         if len(rutas) == 1 and rutas[0].is_file():
             datos["archivo"] = str(rutas[0])
         datos.update(resultado)
+        datos["ok"] = resultado["resumen"]["ok"]
         emitir_json("health", datos)
+        _salir(resultado, estricto)
         return
 
     nombre = rutas[0].name if len(rutas) == 1 else f"{len(archivos)} archivos"
@@ -69,5 +79,15 @@ def health_cmd(
         output_md.parent.mkdir(parents=True, exist_ok=True)
         output_md.write_text(reporte, encoding="utf-8")
         click.echo(f"✓ Reporte Markdown exportado en: {output_md}")
+        resumen = resultado["resumen"]
+        click.echo(f"{'✅' if resumen['ok'] else '❌'} {resumen['total_errores']} errores · "
+                   f"{resumen['total_advertencias']} advertencias")
     else:
         click.echo(reporte)
+    _salir(resultado, estricto)
+
+
+def _salir(resultado: dict, estricto: bool) -> None:
+    resumen = resultado["resumen"]
+    if not resumen["ok"] or (estricto and resumen["advertencias"]):
+        raise typer.Exit(code=1)
