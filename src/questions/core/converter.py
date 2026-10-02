@@ -384,5 +384,6 @@ def xml_to_gift(xml_content: str) -> str:
             meta = ([f"[id:{q.id}]"] if q.id else []) + [f"[tag:{t}]" for t in q.tags]
             bloques.append((f"// {' '.join(meta)}\n" if meta else "") + _seguro_para_gift(question_to_gift(q)))
         else:
-            bloques.append(_sin_equivalente_gift(nodo))
+            # Cloze y plugins: el enunciado también necesita las protecciones de GIFT.
+            bloques.append(_seguro_para_gift(_sin_equivalente_gift(nodo)))
     return "\n\n".join(b for b in bloques if b.strip()) + ("\n" if bloques else "")

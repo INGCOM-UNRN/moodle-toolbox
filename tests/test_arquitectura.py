@@ -80,3 +80,18 @@ def test_health_lee_cada_archivo_una_vez_con_los_mismos_resultados(tmp_path):
     assert [e["archivo"] for e in errores] == [str(latin)] and "Error leyendo archivo" in errores[0]["error"]
     # El archivo ilegible igual se audita como texto (HTML obsoleto).
     assert [h["archivo"] for h in resultado["html_obsoleto"]] == [str(latin)]
+
+
+def test_xml_a_gift_protege_el_cloze_como_las_demas_preguntas():
+    from questions.core.converter import xml_to_gift
+
+    xml = ("<quiz><question type=\"cloze\"><name><text>Completar</text></name>"
+           "<questiontext format=\"html\"><text><![CDATA[<p>Completá:</p>\n<pre>\nint f(void) {\n"
+           "    // paso 1\n    int x = {1:NUMERICAL:=1:0};\n    \n    return x;\n}\n</pre>]]></text></questiontext>"
+           "</question><question type=\"truefalse\"><name><text>Otra</text></name>"
+           "<questiontext><text>¿Sí?</text></questiontext><answer fraction=\"100\"><text>true</text></answer>"
+           "</question></quiz>")
+    preguntas = _preguntas(xml_to_gift(xml))
+    assert [(q["type"], q.get("title")) for q in preguntas] == [("Description", "Completar"), ("TF", "Otra")]
+    texto = preguntas[0]["stem"]["text"]
+    assert "paso 1" in texto and "return x;" in texto  # ni el // ni la línea en blanco la cortan
