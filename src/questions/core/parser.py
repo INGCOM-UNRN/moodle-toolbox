@@ -13,6 +13,7 @@ from typing import Optional
 from questions.core.gift_model import (  # noqa: F401
     QuestionType, FormattedText, Choice, MatchPair, NumericalAnswer, Question,
 )
+from questions.core.metadatos import leer_clasificacion
 from questions.core.gift_semantics import (  # noqa: F401
     GiftSemantics, _llaves_balanceadas, _extraer_ultimo_grupo_llaves,
 )
@@ -144,7 +145,8 @@ class GiftParser:
                 title=title,
                 stem=stem,
                 id=question_id,
-                tags=tags
+                tags=tags,
+                metadata=leer_clasificacion(" ".join(str(c) for c in comments), tags),
             )
         
         stem_before, answer_block = partes
@@ -178,6 +180,7 @@ class GiftParser:
         question.id = question_id
         question.tags = tags
         question.has_embedded_answers = bool(stem_after)
+        question.metadata = leer_clasificacion(" ".join(str(c) for c in comments), tags)
         
         return question
     

@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from questions.core.gift_model import Choice, FormattedText, MatchPair, Question
+from questions.core.metadatos import leer_clasificacion
 
 _FORMATOS = {
     "html": "html",
@@ -131,13 +132,27 @@ def _pregunta(q: ET.Element) -> Question:
 
 
 def parse_moodle_xml(contenido: str) -> list[Question]:
-    """Parsea un documento Moodle XML (<quiz> o una <question> suelta)."""
-    raiz = ET.fromstring(contenido)
+    """Parsea un documento Moodle XML (<quiz> o una <question> suelta).
+
+    El comentario que precede a cada <question> (p. ej. el que escribe classify) aporta su
+    clasificación en `metadata`, igual que los tags bloom:… / dificultad-….
+    """
+    raiz = ET.fromstring(contenido, parser=ET.XMLParser(target=ET.TreeBuilder(insert_comments=True)))
     if raiz.tag == "question":
-        nodos = [raiz]
-    else:
-        nodos = raiz.findall("question")
-    return [_pregunta(q) for q in nodos]
+        return [_con_metadatos(_pregunta(raiz), "")]
+    preguntas, comentario = [], ""
+    for nodo in raiz:
+        if nodo.tag is ET.Comment:
+            comentario += " " + (nodo.text or "")
+        elif nodo.tag == "question":
+            preguntas.append(_con_metadatos(_pregunta(nodo), comentario))
+            comentario = ""
+    return preguntas
+
+
+def _con_metadatos(q: Question, comentario: str) -> Question:
+    q.metadata = leer_clasificacion(comentario, q.tags)
+    return q
 
 
 def parse_xml(contenido: str) -> dict:

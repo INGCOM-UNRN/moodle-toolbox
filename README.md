@@ -46,7 +46,7 @@ Todas las herramientas anteriores han sido consolidadas en un único comando ra�
 
 `scorm-tools from-gift` consume bancos GIFT producidos aquí. La frontera es el
 formato, no el código, y su versión es `questions.core.gift_model.GIFT_CONTRACT_VERSION`
-(hoy `1.0.1`). El contrato cubre los tipos `MC`, `TF`, `Short` y `Numerical`,
+(hoy `1.1.0`). El contrato cubre los tipos `MC`, `TF`, `Short` y `Numerical`,
 con retroalimentación por opción y global; está fijado por
 `tests/test_contrato_gift.py`. Un cambio incompatible sube la versión mayor y
 debe coordinarse con scorm-tools.
