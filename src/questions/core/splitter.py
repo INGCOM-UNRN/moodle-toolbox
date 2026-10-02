@@ -1,4 +1,5 @@
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import List, Tuple
 from questions.core.xml_tools import sanitize_filename
@@ -11,13 +12,53 @@ def extract_title(question_text: str) -> str:
     return ""
 
 def split_gift_questions(content: str) -> List[str]:
-    """Divide el contenido GIFT en preguntas individuales."""
-    # Dividir por una o más líneas en blanco
-    parts = re.split(r'\n\s*\n', content)
-    return [p.strip() for p in parts if p.strip()]
+    """Divide el contenido GIFT en preguntas individuales (una línea en blanco corta
+    sólo con las llaves balanceadas, como el parser)."""
+    from questions.core.formatter import _bloques_gift
+    return [p.strip() for p in _bloques_gift(content) if p.strip()]
+
+def _destino_libre(directorio: Path, base: str, sufijo: str, indice: int) -> Path:
+    destino = directorio / f"{base}{sufijo}"
+    if destino.exists():
+        destino = directorio / f"{base}_{indice}{sufijo}"
+    return destino
+
+
+def split_xml_file(file_path: Path) -> int:
+    """Divide un Moodle XML con varias preguntas en un archivo por pregunta.
+
+    Cada archivo lleva la categoría vigente (la última `<question type="category">`
+    anterior) para que al importarlo la pregunta caiga en el mismo lugar.
+    """
+    from questions.core.formatter import format_xml_content
+
+    raiz = ET.fromstring(file_path.read_text(encoding='utf-8'))
+    preguntas = [q for q in raiz.findall('question') if q.get('type') != 'category']
+    if len(preguntas) <= 1:
+        return 0
+
+    categoria = None
+    count = 0
+    for i, q in enumerate(raiz.findall('question')):
+        if q.get('type') == 'category':
+            categoria = q
+            continue
+        nombre = (q.findtext('name/text') or '').strip()
+        base = sanitize_filename(nombre) if nombre else f"{file_path.stem}_{i+1}"
+        quiz = ET.Element('quiz')
+        if categoria is not None:
+            quiz.append(categoria)
+        quiz.append(q)
+        destino = _destino_libre(file_path.parent, base, '.xml', i + 1)
+        destino.write_text(format_xml_content(ET.tostring(quiz, encoding='unicode')), encoding='utf-8')
+        count += 1
+    return count
+
 
 def split_file(file_path: Path) -> int:
-    """Divide un archivo GIFT en varios archivos individuales."""
+    """Divide un archivo GIFT o Moodle XML en varios archivos individuales."""
+    if file_path.suffix == '.xml':
+        return split_xml_file(file_path)
     if not file_path.suffix == '.gift':
         return 0
         
@@ -35,16 +76,8 @@ def split_file(file_path: Path) -> int:
         else:
             base_name = f"{file_path.stem}_{i+1}"
             
-        new_filename = f"{base_name}.gift"
-        new_path = file_path.parent / new_filename
-        
-        # Evitar sobrescribir si el nombre ya existe (añadir sufijo si es necesario)
-        if new_path.exists():
-            new_path = file_path.parent / f"{base_name}_{i+1}.gift"
-            
+        new_path = _destino_libre(file_path.parent, base_name, '.gift', i + 1)
         new_path.write_text(q + "\n", encoding='utf-8')
         count += 1
         
-    # Opcionalmente borrar el original? El usuario no lo pidió expresamente, 
-    # pero suele ser lo deseado. Dejaré el original por seguridad a menos que se pida.
     return count

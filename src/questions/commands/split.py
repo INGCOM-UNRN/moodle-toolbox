@@ -14,7 +14,7 @@ def split(
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente."),
     remove: bool = typer.Option(False, "--remove", help="Borrar el archivo original después de dividirlo."),
 ):
-    """Divide archivos GIFT con múltiples preguntas en archivos individuales."""
+    """Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales."""
     if not paths:
         paths = ['.']
         
@@ -24,11 +24,12 @@ def split(
         if path.is_file():
             files.append(path)
         elif path.is_dir():
-            pattern = "**/*.gift" if recursive else "*.gift"
-            files.extend(list(path.glob(pattern)))
+            for extension in ("gift", "xml"):
+                pattern = f"**/*.{extension}" if recursive else f"*.{extension}"
+                files.extend(list(path.glob(pattern)))
 
     if not files:
-        click.echo("No se encontraron archivos GIFT.")
+        click.echo("No se encontraron archivos GIFT ni XML.")
         return
 
     total_new_files = 0
