@@ -25,6 +25,34 @@ def convert_html_tags_to_markdown(text):
     return text.strip()
 
 
+_CAMPO_HTML = re.compile(
+    r'(<(\w+)\b[^>]*?)\bformat="html"([^>]*>\s*<text\b[^>]*(?<!/)>)(.*?)(</text>)', re.DOTALL)
+
+
+def html_a_markdown_xml(xml: str) -> tuple:
+    """Convierte a markdown los campos HTML de un Moodle XML, uno por uno.
+
+    Sólo los campos cuyo texto cambia pasan a format="markdown" (y a CDATA); los demás
+    conservan su formato. Devuelve el XML y la cantidad de campos convertidos.
+    """
+    from questions.core.codigo import _CDATA, _desescapar_xml, a_cdata
+
+    convertidos = 0
+
+    def campo(m: re.Match) -> str:
+        nonlocal convertidos
+        antes, _, medio, contenido, cierre = m.groups()
+        partes = _CDATA.findall(contenido)
+        texto = "".join(partes) if partes and not _CDATA.sub("", contenido).strip() else _desescapar_xml(contenido)
+        nuevo = convert_html_tags_to_markdown(texto)
+        if nuevo == texto.strip():
+            return m.group(0)
+        convertidos += 1
+        return f'{antes}format="markdown"{medio}{a_cdata(nuevo)}{cierre}'
+
+    return _CAMPO_HTML.sub(campo, xml), convertidos
+
+
 # ============================================================================
 # Conversores GIFT <-> Moodle XML sobre el modelo unificado de preguntas
 # ============================================================================

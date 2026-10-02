@@ -139,3 +139,23 @@ def test_split_gift_conserva_la_categoria_en_cada_archivo(tmp_path):
     assert (tmp_path / "dos.gift").read_text(encoding="utf-8").startswith("$CATEGORY: $course$/C/Punteros\n\n::Dos::")
     assert (tmp_path / "tres.gift").read_text(encoding="utf-8").startswith("$CATEGORY: $course$/C/Arreglos\n\n::Tres::")
     assert sorted(p.name for p in tmp_path.iterdir()) == ["banco.gift", "dos.gift", "tres.gift", "uno.gift"]
+
+
+def test_html_a_markdown_cambia_solo_los_campos_convertidos():
+    import xml.etree.ElementTree as ET
+
+    from questions.core.converter import html_a_markdown_xml
+
+    xml = ('<quiz><question type="multichoice"><questiontext format="html"><text>&lt;p&gt;¿Qué hace '
+           '&lt;code&gt;x++&lt;/code&gt;?&lt;/p&gt;</text></questiontext>'
+           '<generalfeedback format="html"><text>Sin etiquetas</text></generalfeedback>'
+           '<answer fraction="100" format="html"><text><![CDATA[<b>Incrementa</b>]]></text></answer>'
+           '<answer fraction="0" format="html"><text/></answer></question></quiz>')
+    nuevo, cantidad = html_a_markdown_xml(xml)
+    q = ET.fromstring(nuevo).find("question")
+    assert cantidad == 2
+    assert q.find("questiontext").get("format") == "markdown"
+    assert q.findtext("questiontext/text") == "¿Qué hace `x++`?"
+    assert q.find("generalfeedback").get("format") == "html"
+    assert [a.get("format") for a in q.findall("answer")] == ["markdown", "html"]
+    assert q.find("answer").findtext("text") == "**Incrementa**"

@@ -1,10 +1,10 @@
 import click
-import re
 import typer
 from pathlib import Path
 from typing import List, Optional
 from questions.core.converter import (
     convert_html_tags_to_markdown,
+    html_a_markdown_xml,
     xml_to_gift,
     gift_to_xml,
 )
@@ -41,14 +41,9 @@ def html_to_md(
     for f in files:
         try:
             content = f.read_text(encoding='utf-8')
-            # Si es XML, procesar dentro de CDATA
+            # En XML, campo por campo: sólo los que cambian pasan a format="markdown".
             if f.suffix == '.xml':
-                def replace_cdata(match):
-                    return f"<![CDATA[{convert_html_tags_to_markdown(match.group(1))}]]>"
-                import re
-                modified = re.sub(r'<!\[CDATA\[(.*?)\]\]>', replace_cdata, content, flags=re.DOTALL)
-                # También cambiar format="html" a format="markdown"
-                modified = modified.replace('format="html"', 'format="markdown"')
+                modified, _ = html_a_markdown_xml(content)
             else:
                 modified = convert_html_tags_to_markdown(content)
             
