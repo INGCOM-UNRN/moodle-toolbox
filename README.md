@@ -83,7 +83,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions validate`: Valida archivos o directorios GIFT y Moodle XML, genera informes detallados y detecta duplicados.
 - `questions analyze stats`: Genera estadísticas completas sobre un repositorio de preguntas (por formato, tipo, categoría y tags).
 - `questions analyze similar`: Encuentra preguntas similares usando TF-IDF + Jaccard, también entre un `.gift` y un `.xml`; escala a miles de preguntas.
-- `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas (la correcta más larga que los distractores), código sin proteger, backticks sin cerrar, enlaces y HTML obsoleto.
+- `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas (la correcta más larga que los distractores), código sin proteger, backticks sin cerrar, enlaces y HTML obsoleto. Separa errores de advertencias y sale con código 1 si hay errores (`--estricto`: también con advertencias).
 
 ### 2. Formateo y Corrección (GIFT y XML)
 - `questions format`: Estandariza el formato visual de archivos GIFT y Moodle XML (`--correct-first` ordena las opciones por porcentaje). `--fullwidth` protege el código: símbolos fullwidth, `·` en la indentación y `↵` al final de cada línea; `--normal` lo deshace. Ver [caracteres especiales](./docs/caracteres_especiales.md).
@@ -111,7 +111,7 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions xml rename`: Renombra archivos XML basándose en el nombre interno de la pregunta.
 
 ### 7. Inteligencia Artificial (Gemini)
-- `questions ai`: Mejora la calidad pedagógica (`improve`) o crea variaciones (`multiply`) de preguntas usando modelos de Google Gemini.
+- `questions ai`: Mejora la calidad pedagógica (`improve`) o crea variaciones (`multiply`) de preguntas GIFT y Moodle XML usando modelos de Google Gemini. El modelo recibe GIFT compacto (sin metadatos ni marcas, código en ASCII) y la respuesta se aplica sobre el archivo original; `--dry-run` muestra lo que se enviaría y cuánto se ahorra.
 
 ## 📚 Documentación Detallada
 

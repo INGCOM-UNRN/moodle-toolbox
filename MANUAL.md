@@ -56,7 +56,7 @@ questions doctor
 | :--- | :--- |
 | [`questions doctor`](#doctor) | Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis). |
 | [`questions health`](#health) | Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces. |
-| [`questions ai`](#ai) | Procesamiento de preguntas usando IA (Gemini). |
+| [`questions ai`](#ai) | Procesamiento de preguntas GIFT y Moodle XML usando IA (Gemini). |
 | [`questions validate`](#validate) | Valida archivos o directorios de preguntas GIFT y Moodle XML. |
 | [`questions format`](#format) | Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵). |
 | [`questions split`](#split) | Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales. |
@@ -92,6 +92,8 @@ Audita la salud del banco sobre el modelo unificado de preguntas: **da el mismo 
 - **Código:** secciones sin proteger para GIFT, marcas no canónicas (U+2007, NBSP, `;` griego) y líneas en blanco sin `↵`; backticks sin cerrar.
 - **Enlaces y HTML:** URLs `http://` o locales y etiquetas obsoletas (`<font>`, `<center>`, `style=`).
 
+El informe empieza con un **resultado** que separa errores de advertencias. Son errores lo que Moodle no importaría o importaría mal: archivos ilegibles, porcentajes rechazados o que no suman 100, preguntas sin respuesta correcta o sin enunciado y, en GIFT, código que el formato interpreta o con líneas en blanco. El resto (feedback, opciones, longitud, enlaces, HTML) son advertencias. **Sale con código 1 si hay errores** (con `--estricto`, también ante advertencias); el JSON lleva `ok` y `resumen`.
+
 #### Argumentos
 | Argumento | Tipo | Descripción |
 | :--- | :--- | :--- |
@@ -106,6 +108,7 @@ Audita la salud del banco sobre el modelo unificado de preguntas: **da el mismo 
 | `--min-opciones` | `<class 'int'>` | `3` | Mínimo de opciones esperado en opción múltiple. |
 | `--umbral-longitud` | `<class 'float'>` | `1.5` | Razón de largo correcta/distractores a partir de la cual se advierte. |
 | `--max-items` | `<class 'int'>` | `50` | Máximo de preguntas listadas por sección (0: todas). |
+| `--estricto` | `<class 'bool'>` | `False` | Salir con código 1 también ante advertencias. |
 | `--json` | `<class 'bool'>` | `False` | Emite el diagnóstico como JSON versionado. |
 
 #### Ejemplo de Invocación
@@ -116,12 +119,20 @@ questions health preguntas/ -r --md salud.md
 
 ### `questions ai`
 
-Procesamiento de preguntas usando IA (Gemini).
+Procesa preguntas GIFT y Moodle XML con Gemini (`improve`, `multiply` o `transform`). El modelo siempre recibe **GIFT compacto**, el formato más corto y el que los LLM conocen mejor:
+
+- No se envían comentarios (`// [tag:…]`, `[id:…]`), `$CATEGORY` ni la estructura del XML; se conservan aparte.
+- El código va en ASCII normal y sin las marcas `·`/`↵` (los símbolos fullwidth cuestan más tokens); la respuesta se vuelve a proteger y cada archivo recupera la convención de su original.
+- En XML la respuesta se aplica sobre el `<question>` original: se conservan penalización, puntaje, numeración, tags, `idnumber` y formatos. Las variaciones de `multiply` no repiten el `idnumber`.
+- Una respuesta que no es GIFT válido, que cambia el tipo o (en `improve`) la cantidad de opciones o de correctas deja la pregunta original.
+- Con `--output`, la salida conserva la estructura de directorios.
+
+En los bancos de la cátedra, lo enviado es un 47 % más corto que los archivos XML y un 7 % más corto que los GIFT.
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
-| `--inputs` | `Optional[List[pathlib.Path]]` | `None` | - |
+| `--inputs` | `Optional[List[pathlib.Path]]` | `None` | Archivos .gift/.xml o directorios. |
 | `--llm` | `<class 'bool'>` | `False` | Muestra instrucciones para un LLM sobre este comando. |
 | `--mode` | `<class 'str'>` | `improve` | Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado). |
 | `--prompt` | `Optional[str]` | `None` | Prompt personalizado o ruta a un archivo .txt con el prompt. |
@@ -131,10 +142,12 @@ Procesamiento de preguntas usando IA (Gemini).
 | `--batch-size` | `<class 'int'>` | `5` | Número de preguntas por petición a la API (default: 5). |
 | `-i`, `--in-place` | `<class 'bool'>` | `False` | Escribir en la misma carpeta que el original. |
 | `--suffix` | `Optional[str]` | `None` | Sufijo para los nuevos archivos (usado con --in-place, ej: -ia). |
+| `-n`, `--dry-run` | `<class 'bool'>` | `False` | Mostrar lo que se enviaría (y cuánto se ahorra) sin llamar al modelo ni escribir archivos. |
 
 #### Ejemplo de Invocación
 ```bash
-questions ai
+questions ai banco.xml --dry-run
+questions ai preguntas/ -r --mode multiply --output variaciones/
 ```
 
 ### `questions validate`
