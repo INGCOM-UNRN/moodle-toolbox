@@ -1,52 +1,69 @@
-"""Comando de auditoría de salud e higiene de bancos Moodle."""
+"""Comando de auditoría de salud e higiene de bancos Moodle (GIFT y XML)."""
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import click
 import typer
 
-from questions.commands.common import emitir_json
+from questions.commands.common import emitir_json, fail
 
+from questions.core.banco import expandir_rutas, formato_de
 from questions.core.moodle_health import (
-    verificar_porcentajes_opciones,
-    auditar_retroalimentaciones,
-    limpiar_html_y_estilos_obsoletos,
-    auditar_enlaces_y_multimedia,
-    generar_reporte_salud_markdown,
+    MIN_OPCIONES,
+    UMBRAL_LONGITUD,
+    auditar_archivos,
+    generar_reporte_markdown,
+    limpiar_html_archivo,
 )
 
 
 def health_cmd(
-    archivo: Path = typer.Argument(..., exists=True),
+    rutas: List[Path] = typer.Argument(..., exists=True, help="Archivos .gift/.xml o directorios."),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente en los directorios."),
     output_md: Optional[Path] = typer.Option(
         None, "--md", help="Exportar reporte en Markdown."
     ),
     clean_html: bool = typer.Option(
-        False, "--clean-html", help="Limpiar etiquetas HTML obsoletas y estilos inline."
+        False, "--clean-html", help="Limpiar etiquetas HTML obsoletas y estilos inline (GIFT y XML)."
     ),
+    min_opciones: int = typer.Option(
+        MIN_OPCIONES, "--min-opciones", help="Mínimo de opciones esperado en opción múltiple."
+    ),
+    umbral_longitud: float = typer.Option(
+        UMBRAL_LONGITUD, "--umbral-longitud",
+        help="Razón de largo correcta/distractores a partir de la cual se advierte.",
+    ),
+    max_items: int = typer.Option(50, "--max-items", help="Máximo de preguntas listadas por sección (0: todas)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
-    """Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas."""
-    contenido = archivo.read_text(encoding="utf-8", errors="replace")
-    es_xml = archivo.suffix.lower() == ".xml"
+    """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces."""
+    archivos = expandir_rutas(rutas, recursive)
+    archivos = [a for a in archivos if formato_de(a)]
+    if not archivos:
+        fail("No se encontraron archivos de preguntas (.gift / .xml).")
 
-    if clean_html and not es_xml:
-        limpio = limpiar_html_y_estilos_obsoletos(contenido)
-        archivo.write_text(limpio, encoding="utf-8")
-        click.echo(f"✓ Archivo limpio de etiquetas obsoletas y estilos CSS inline: {archivo}")
-        contenido = limpio
+    if clean_html:
+        for archivo in archivos:
+            contenido = archivo.read_text(encoding="utf-8", errors="replace")
+            limpio = limpiar_html_archivo(contenido, formato_de(archivo))
+            if limpio != contenido:
+                archivo.write_text(limpio, encoding="utf-8")
+                if not output_json:
+                    click.echo(f"✓ Archivo limpio de etiquetas obsoletas y estilos CSS inline: {archivo}")
+
+    resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud)
 
     if output_json:
-        datos = {"archivo": str(archivo), "formato": "xml" if es_xml else "gift"}
-        if not es_xml:
-            datos["porcentajes"] = verificar_porcentajes_opciones(contenido)
-            datos["retroalimentacion"] = auditar_retroalimentaciones(contenido)
-            datos["enlaces"] = auditar_enlaces_y_multimedia(contenido)
+        datos = {}
+        if len(rutas) == 1 and rutas[0].is_file():
+            datos["archivo"] = str(rutas[0])
+        datos.update(resultado)
         emitir_json("health", datos)
         return
 
-    reporte = generar_reporte_salud_markdown(archivo, contenido, es_xml=es_xml)
+    nombre = rutas[0].name if len(rutas) == 1 else f"{len(archivos)} archivos"
+    reporte = generar_reporte_markdown(resultado, nombre, max_items=max_items)
 
     if output_md:
         output_md.parent.mkdir(parents=True, exist_ok=True)

@@ -1,89 +1,293 @@
 """
 Módulo de auditoría de salud, higiene y estandarización para bancos Moodle (GIFT / XML).
 
+Las auditorías de preguntas trabajan sobre el modelo unificado (el mismo para GIFT y
+Moodle XML), así que un banco da el mismo diagnóstico en cualquiera de los dos formatos.
+
 Incluye:
-- Verificador de sumas de porcentajes en opciones de respuesta (exactamente 100%)
+- Porcentajes de las opciones: suma de 100 %, al menos una respuesta de 100 % y
+  fracciones que Moodle acepta al importar (las que no, hacen que se descarte la pregunta)
+- Retroalimentación: general y por opción (cobertura y preguntas sin feedback)
+- Cantidad de opciones: distribución, preguntas con pocas opciones y opciones repetidas
+- Longitud relativa de las respuestas: la correcta notablemente más larga (o más corta)
+  que los distractores es una pista para el estudiante
+- Código: secciones sin proteger para GIFT, marcas no canónicas, líneas en blanco
+- Enlaces inseguros o locales y etiquetas HTML obsoletas (con limpieza opcional)
 - Optimizador de nombres con taxonomía y tema ([P1][Tema][B2])
-- Auditor de retroalimentaciones generales y específicas ausentes
-- Limpiador de etiquetas HTML obsoletas/rotas (font, center, etc.) y CSS inline
-- Detector de URLs rotas y recursos multimedia inaccesibles
 - Conversor de codificación Windows-1252 a UTF-8 limpio
 - Generador de reportes de salud en Markdown
-- Validador de compatibilidad con versiones Moodle 3.9 a 4.4+
 """
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import xml.etree.ElementTree as ET
+from statistics import mean
+from typing import Any, Dict, Iterable, List, Optional
+
+from questions.core.banco import formato_de, parse_archivo
+from questions.core.codigo import diagnosticar_codigo, transformar_textos_xml
+from questions.core.moodle_xml import parse_xml
+from questions.core.parser import parse_gift
+
+# Fracciones que Moodle acepta al importar (question_bank::fraction_options_full);
+# cualquier otra hace que la importación descarte la pregunta ("invalidgrade").
+FRACCIONES_MOODLE = (
+    100, 90, 83.33333, 80, 75, 70, 66.66667, 60, 50, 40, 33.33333, 30, 25, 20,
+    16.66667, 14.28571, 12.5, 11.11111, 10, 5, 0,
+)
+_TOLERANCIA_FRACCION = 0.001  # en puntos porcentuales (Moodle: 1e-5 sobre la fracción)
+
+MIN_OPCIONES = 3
+MIN_PARES_MATCHING = 3
+UMBRAL_LONGITUD = 1.5
+
+_SIN_RESPUESTAS = ("Category", "Description", "Cloze")
 
 
-def verificar_porcentajes_opciones(texto_gift: str) -> Dict[str, Any]:
+# ---------------------------------------------------------------------------
+# Utilidades sobre el modelo
+# ---------------------------------------------------------------------------
+
+def _texto(ft: Any) -> str:
+    if isinstance(ft, dict):
+        return ft.get("text") or ""
+    return ft or ""
+
+
+def _plano(texto: str) -> str:
+    """Texto visible: sin etiquetas HTML ni backticks, con espacios colapsados."""
+    texto = re.sub(r"<[^>]+>", " ", texto or "")
+    texto = texto.replace("`", "")
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def _fraccion(opcion: dict) -> float:
+    if opcion.get("weight") is not None:
+        return float(opcion["weight"])
+    return 100.0 if opcion.get("is_correct") else 0.0
+
+
+def _ref(pregunta: dict) -> Dict[str, str]:
+    titulo = pregunta.get("title") or _plano(_texto(pregunta.get("stem")))[:60] or "<sin título>"
+    ref = {"titulo": titulo}
+    if pregunta.get("filepath"):
+        ref["archivo"] = pregunta["filepath"]
+    return ref
+
+
+def _evaluables(preguntas: Iterable[dict]) -> List[dict]:
+    return [p for p in preguntas if p.get("type") not in _SIN_RESPUESTAS]
+
+
+def _fraccion_valida(valor: float) -> bool:
+    return any(abs(abs(valor) - f) <= _TOLERANCIA_FRACCION for f in FRACCIONES_MOODLE)
+
+
+# ---------------------------------------------------------------------------
+# Auditorías sobre preguntas del modelo unificado (GIFT o XML)
+# ---------------------------------------------------------------------------
+
+def auditar_porcentajes(preguntas: Iterable[dict]) -> Dict[str, Any]:
+    """Claves de corrección: suma de porcentajes, respuesta de 100 % y fracciones válidas.
+
+    - Opción múltiple con una respuesta de 100 %: respuesta única (las demás pueden dar
+      crédito parcial). Sin ninguna de 100 %: respuesta múltiple, y los porcentajes
+      positivos deben sumar 100.
+    - Respuesta corta y numérica: alguna respuesta tiene que valer 100 %.
+    - Toda fracción debe estar entre las que Moodle acepta al importar.
     """
-    Verifica que las opciones de respuestas con porcentaje sumen exactamente 100%.
-    """
-    patron_pregunta = re.compile(r"::(.*?)::(.*?)\{(.*?)\}", re.DOTALL)
-    inconsistencias = []
-    total_revisadas = 0
+    inconsistentes, sin_correcta, invalidas = [], [], []
+    revisadas = 0
+    for p in preguntas:
+        if p.get("type") not in ("MC", "Short", "Numerical"):
+            continue
+        opciones = p.get("choices", [])
+        if not opciones:
+            continue
+        revisadas += 1
+        fracciones = [_fraccion(o) for o in opciones]
+        positivas = [f for f in fracciones if f > 0]
+        suma = sum(positivas)
+        hay_100 = any(abs(f - 100.0) < 0.01 for f in fracciones)
 
-    for m in patron_pregunta.finditer(texto_gift):
-        titulo = m.group(1).strip()
-        bloque_respuestas = m.group(3)
-        total_revisadas += 1
+        if not positivas:
+            sin_correcta.append(_ref(p))
+        elif p.get("type") == "MC" and not hay_100 and abs(suma - 100.0) > 0.1:
+            inconsistentes.append({**_ref(p), "suma_positivos": round(suma, 5), "porcentajes": fracciones})
+        elif p.get("type") != "MC" and not hay_100:
+            inconsistentes.append({**_ref(p), "suma_positivos": round(suma, 5), "porcentajes": fracciones,
+                                   "motivo": "ninguna respuesta vale 100 %"})
 
-        pcts = re.findall(r"%(-?\d+(?:\.\d+)?)%", bloque_respuestas)
-        if pcts:
-            suma_positivos = sum(float(p) for p in pcts if float(p) > 0)
-            if abs(suma_positivos - 100.0) > 0.01:
-                inconsistencias.append({
-                    "titulo": titulo,
-                    "suma_positivos": suma_positivos,
-                    "porcentajes": [float(p) for p in pcts]
-                })
+        fuera = [f for f in fracciones if not _fraccion_valida(f)]
+        if fuera:
+            invalidas.append({**_ref(p), "fracciones": fuera})
 
     return {
-        "ok": len(inconsistencias) == 0,
-        "total_preguntas": total_revisadas,
-        "preguntas_inconsistentes": inconsistencias
+        "ok": not (inconsistentes or sin_correcta or invalidas),
+        "total_preguntas": revisadas,
+        "preguntas_inconsistentes": inconsistentes,
+        "preguntas_sin_correcta": sin_correcta,
+        "fracciones_invalidas": invalidas,
     }
 
 
-def estandarizar_nombre_pregunta(
-    titulo_actual: str,
-    materia: str = "P1",
-    tema: str = "General",
-    bloom: str = "B2"
-) -> str:
-    """
-    Estandariza el título con el prefijo institucional [Materia][Tema][Bloom].
-    """
-    limpio = re.sub(r"^\[.*?\]\s*", "", titulo_actual).strip()
-    return f"[{materia}][{tema}][{bloom}] {limpio}"
+def auditar_feedback(preguntas: Iterable[dict]) -> Dict[str, Any]:
+    """Cobertura de retroalimentación general y por opción."""
+    evaluables = _evaluables(preguntas)
+    sin_feedback, parcial = [], []
+    con_global = opciones_total = opciones_con = 0
 
+    for p in evaluables:
+        tiene_global = bool(_texto(p.get("globalFeedback")).strip())
+        con_global += tiene_global
+        if p.get("type") == "TF":
+            retros = [p.get("trueFeedback"), p.get("falseFeedback")]
+        elif p.get("type") in ("MC", "Short", "Numerical"):
+            retros = [o.get("feedback") for o in p.get("choices", [])]
+        else:
+            retros = []
+        con = sum(1 for r in retros if _texto(r).strip())
+        opciones_total += len(retros)
+        opciones_con += con
+        if not tiene_global and not con:
+            sin_feedback.append(_ref(p))
+        elif retros and con < len(retros):
+            parcial.append({**_ref(p), "opciones_sin_feedback": len(retros) - con, "opciones": len(retros)})
 
-def auditar_retroalimentaciones(texto_gift: str) -> Dict[str, Any]:
-    """
-    Detecta preguntas que carecen de retroalimentación en opciones incorrectas (#explicacion).
-    """
-    patron_pregunta = re.compile(r"::(.*?)::(.*?)\{(.*?)\}", re.DOTALL)
-    sin_feedback = []
-    total = 0
-
-    for m in patron_pregunta.finditer(texto_gift):
-        titulo = m.group(1).strip()
-        bloque = m.group(3)
-        total += 1
-        # Si tiene opciones ~ o = pero ninguna contiene '#'
-        if ("~" in bloque or "=" in bloque) and "#" not in bloque:
-            sin_feedback.append(titulo)
-
+    total = len(evaluables)
     return {
         "total_preguntas": total,
+        "con_feedback_global": con_global,
         "sin_feedback_count": len(sin_feedback),
         "preguntas_sin_feedback": sin_feedback,
-        "porcentaje_cobertura": round(((total - len(sin_feedback)) / total * 100) if total else 100.0, 1)
+        "preguntas_feedback_parcial": parcial,
+        "opciones_total": opciones_total,
+        "opciones_con_feedback": opciones_con,
+        "porcentaje_cobertura": round(((total - len(sin_feedback)) / total * 100) if total else 100.0, 1),
+        "porcentaje_feedback_global": round((con_global / total * 100) if total else 100.0, 1),
+        "porcentaje_opciones_con_feedback": round(
+            (opciones_con / opciones_total * 100) if opciones_total else 100.0, 1),
     }
+
+
+def auditar_opciones(preguntas: Iterable[dict], min_opciones: int = MIN_OPCIONES) -> Dict[str, Any]:
+    """Cantidad de opciones por pregunta y opciones repetidas."""
+    distribucion: Counter = Counter()
+    pocas, repetidas = [], []
+    for p in preguntas:
+        tipo = p.get("type")
+        if tipo == "MC":
+            textos = [_plano(_texto(o.get("text"))).lower() for o in p.get("choices", [])]
+            distribucion[len(textos)] += 1
+            if len(textos) < min_opciones:
+                pocas.append({**_ref(p), "opciones": len(textos), "tipo": tipo})
+        elif tipo == "Matching":
+            pares = p.get("matchPairs", [])
+            if len(pares) < MIN_PARES_MATCHING:
+                pocas.append({**_ref(p), "opciones": len(pares), "tipo": tipo})
+            continue
+        elif tipo == "Short":
+            textos = [_plano(_texto(o.get("text"))).lower() for o in p.get("choices", [])]
+        else:
+            continue
+        dup = sorted(t for t, n in Counter(t for t in textos if t).items() if n > 1)
+        if dup:
+            repetidas.append({**_ref(p), "repetidas": dup})
+
+    total_mc = sum(distribucion.values())
+    return {
+        "minimo": min_opciones,
+        "distribucion_mc": {str(k): v for k, v in sorted(distribucion.items())},
+        "promedio_mc": round(sum(k * v for k, v in distribucion.items()) / total_mc, 2) if total_mc else 0,
+        "preguntas_pocas_opciones": pocas,
+        "preguntas_opciones_repetidas": repetidas,
+    }
+
+
+def auditar_longitudes(preguntas: Iterable[dict], umbral: float = UMBRAL_LONGITUD) -> Dict[str, Any]:
+    """Longitud relativa de las respuestas en opción múltiple.
+
+    Compara el largo medio de las respuestas correctas con el de los distractores:
+    si la razón es >= `umbral` (o <= 1/umbral) la longitud delata la respuesta. A
+    nivel banco, compara cuántas veces la correcta es la opción más larga con lo que
+    se esperaría por azar (1/n por pregunta): un exceso indica un sesgo sistemático.
+    """
+    mas_larga, mas_corta = [], []
+    revisadas = unica_mas_larga = 0
+    esperado = 0.0
+    for p in preguntas:
+        if p.get("type") != "MC":
+            continue
+        opciones = [(len(_plano(_texto(o.get("text")))), _fraccion(o)) for o in p.get("choices", [])]
+        correctas = [n for n, f in opciones if f > 0]
+        distractores = [n for n, f in opciones if f <= 0]
+        if not correctas or not distractores:
+            continue
+        revisadas += 1
+        largo_c, largo_d = mean(correctas), mean(distractores)
+        if largo_c and largo_d:
+            razon = largo_c / largo_d
+            item = {**_ref(p), "razon": round(razon, 2), "largo_correcta": round(largo_c, 1),
+                    "largo_distractores": round(largo_d, 1)}
+            if razon >= umbral:
+                mas_larga.append(item)
+            elif razon <= 1 / umbral:
+                mas_corta.append(item)
+        if len(correctas) == 1:
+            esperado += 1 / len(opciones)
+            if correctas[0] > max(distractores):
+                unica_mas_larga += 1
+
+    return {
+        "umbral": umbral,
+        "preguntas_revisadas": revisadas,
+        "preguntas_correcta_mas_larga": mas_larga,
+        "preguntas_correcta_mas_corta": mas_corta,
+        "correcta_es_la_mas_larga": unica_mas_larga,
+        "correcta_es_la_mas_larga_esperado": round(esperado, 1),
+    }
+
+
+def _backticks_desbalanceados(texto: str) -> bool:
+    """Un ``` o un ` sin cerrar: el código se come el resto del texto (y en GIFT la
+    transformación a fullwidth no puede saber dónde termina)."""
+    return texto.count("```") % 2 == 1 or texto.replace("```", "").count("`") % 2 == 1
+
+
+def auditar_estructura(preguntas: Iterable[dict]) -> Dict[str, Any]:
+    """Preguntas sin título o sin enunciado, código sin cerrar y conteo por tipo."""
+    por_tipo: Counter = Counter()
+    sin_titulo, sin_enunciado, sin_cerrar = [], [], []
+    for p in preguntas:
+        tipo = p.get("type")
+        if tipo == "Category":
+            continue
+        por_tipo[tipo] += 1
+        if not p.get("title"):
+            sin_titulo.append(_ref(p))
+        if not _plano(_texto(p.get("stem"))):
+            sin_enunciado.append(_ref(p))
+        textos = [p.get("stem"), p.get("globalFeedback"), p.get("trueFeedback"), p.get("falseFeedback")]
+        for o in p.get("choices", []):
+            textos += [o.get("text"), o.get("feedback")]
+        abiertos = sum(1 for t in textos if _backticks_desbalanceados(_texto(t)))
+        if abiertos:
+            sin_cerrar.append({**_ref(p), "textos": abiertos})
+    return {
+        "total_preguntas": sum(por_tipo.values()),
+        "por_tipo": dict(por_tipo.most_common()),
+        "preguntas_sin_titulo": sin_titulo,
+        "preguntas_sin_enunciado": sin_enunciado,
+        "preguntas_codigo_sin_cerrar": sin_cerrar,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Auditorías sobre el texto (enlaces, HTML, código)
+# ---------------------------------------------------------------------------
+
+_HTML_OBSOLETO = re.compile(r"<(font|center|marquee)\b|\sstyle\s*=", re.IGNORECASE)
 
 
 def limpiar_html_y_estilos_obsoletos(texto_html: str) -> str:
@@ -100,11 +304,21 @@ def limpiar_html_y_estilos_obsoletos(texto_html: str) -> str:
     return limpio.strip()
 
 
+def limpiar_html_archivo(contenido: str, formato: str) -> str:
+    """Limpia HTML obsoleto: en GIFT sobre todo el texto, en XML dentro de cada <text>."""
+    if formato == "xml":
+        def limpiar(texto: str):
+            limpio = limpiar_html_y_estilos_obsoletos(texto)
+            return limpio, int(limpio != texto.strip())
+        return transformar_textos_xml(contenido, limpiar)[0]
+    return limpiar_html_y_estilos_obsoletos(contenido)
+
+
 def auditar_enlaces_y_multimedia(texto: str) -> Dict[str, Any]:
     """
     Detecta URLs HTTP no seguras, servidores locales 'localhost' o links caídos/sospechosos.
     """
-    urls = re.findall(r'https?://[^\s"\'<>{}|\\^`]+', texto)
+    urls = re.findall(r'https?://[^\s"\'<>{}|\\^`\]]+', texto)
     sospechosas = []
     for u in urls:
         if "localhost" in u or "127.0.0.1" in u:
@@ -119,6 +333,147 @@ def auditar_enlaces_y_multimedia(texto: str) -> Dict[str, Any]:
     }
 
 
+def _textos_xml(contenido: str) -> List[str]:
+    """Contenido (desescapado) de cada <text> de un XML."""
+    textos: List[str] = []
+
+    def juntar(texto: str):
+        textos.append(texto)
+        return texto, 0
+
+    transformar_textos_xml(contenido, juntar)
+    return textos
+
+
+def auditar_texto(contenido: str, formato: str) -> Dict[str, Any]:
+    """Enlaces, HTML obsoleto y código de un archivo (GIFT o XML)."""
+    if formato == "xml":
+        textos = _textos_xml(contenido)
+        codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
+        for t in textos:
+            for clave, valor in diagnosticar_codigo(t, "xml").items():
+                codigo[clave] += valor
+        visible = "\n".join(textos)
+    else:
+        codigo = diagnosticar_codigo(contenido, "gift")
+        visible = contenido
+    return {
+        "enlaces": auditar_enlaces_y_multimedia(visible),
+        "html_obsoleto": len(_HTML_OBSOLETO.findall(visible)),
+        "codigo": codigo,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Auditoría completa
+# ---------------------------------------------------------------------------
+
+def auditar_preguntas(
+    preguntas: List[dict],
+    min_opciones: int = MIN_OPCIONES,
+    umbral_longitud: float = UMBRAL_LONGITUD,
+) -> Dict[str, Any]:
+    """Todas las auditorías de preguntas (formato indistinto)."""
+    return {
+        "estructura": auditar_estructura(preguntas),
+        "porcentajes": auditar_porcentajes(preguntas),
+        "retroalimentacion": auditar_feedback(preguntas),
+        "opciones": auditar_opciones(preguntas, min_opciones),
+        "longitud": auditar_longitudes(preguntas, umbral_longitud),
+    }
+
+
+def auditar_archivos(
+    archivos: Iterable[Path],
+    min_opciones: int = MIN_OPCIONES,
+    umbral_longitud: float = UMBRAL_LONGITUD,
+    contenidos: Optional[Dict[Path, str]] = None,
+) -> Dict[str, Any]:
+    """Audita un conjunto de archivos GIFT y/o XML como un único banco."""
+    preguntas: List[dict] = []
+    errores: List[dict] = []
+    por_formato: Counter = Counter()
+    enlaces = {"total_urls": 0, "urls_sospechosas": [], "todas_validas": True}
+    codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
+    archivos_codigo: List[dict] = []
+    html_obsoleto: List[dict] = []
+    archivos = list(archivos)
+
+    for ruta in archivos:
+        formato = formato_de(ruta) or "gift"
+        por_formato[formato] += 1
+        if contenidos and ruta in contenidos:
+            contenido = contenidos[ruta]
+            resultado = parse_xml(contenido) if formato == "xml" else parse_gift(contenido)
+        else:
+            contenido = ruta.read_text(encoding="utf-8", errors="replace")
+            resultado = parse_archivo(ruta)
+        if not resultado.get("success"):
+            errores.append({"archivo": str(ruta), "error": resultado["error"]["message"]})
+        else:
+            for p in resultado["questions"]:
+                preguntas.append({**p, "filepath": str(ruta), "formato": formato})
+
+        texto = auditar_texto(contenido, formato)
+        enlaces["total_urls"] += texto["enlaces"]["total_urls"]
+        enlaces["urls_sospechosas"].extend(
+            {**u, "archivo": str(ruta)} for u in texto["enlaces"]["urls_sospechosas"])
+        for clave, valor in texto["codigo"].items():
+            codigo[clave] += valor
+        if texto["codigo"]["sin_proteger"] or texto["codigo"]["variantes"] or texto["codigo"]["lineas_vacias"]:
+            archivos_codigo.append({"archivo": str(ruta), **texto["codigo"]})
+        if texto["html_obsoleto"]:
+            html_obsoleto.append({"archivo": str(ruta), "ocurrencias": texto["html_obsoleto"]})
+
+    enlaces["todas_validas"] = not enlaces["urls_sospechosas"]
+    codigo["archivos"] = archivos_codigo
+    formatos = sorted(por_formato)
+    return {
+        "formato": formatos[0] if len(formatos) == 1 else ("mixto" if formatos else None),
+        "archivos": {"total": len(archivos), "por_formato": dict(por_formato), "errores": errores},
+        **auditar_preguntas(preguntas, min_opciones, umbral_longitud),
+        "codigo": codigo,
+        "enlaces": enlaces,
+        "html_obsoleto": html_obsoleto,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Compatibilidad: auditorías sobre texto GIFT
+# ---------------------------------------------------------------------------
+
+def _preguntas_gift(texto_gift: str) -> List[dict]:
+    resultado = parse_gift(texto_gift)
+    return resultado["questions"] if resultado.get("success") else []
+
+
+def verificar_porcentajes_opciones(texto_gift: str) -> Dict[str, Any]:
+    """
+    Verifica las claves de corrección de un texto GIFT (ver `auditar_porcentajes`).
+    """
+    return auditar_porcentajes(_preguntas_gift(texto_gift))
+
+
+def auditar_retroalimentaciones(texto_gift: str) -> Dict[str, Any]:
+    """
+    Detecta preguntas de un texto GIFT sin retroalimentación (ver `auditar_feedback`).
+    """
+    return auditar_feedback(_preguntas_gift(texto_gift))
+
+
+def estandarizar_nombre_pregunta(
+    titulo_actual: str,
+    materia: str = "P1",
+    tema: str = "General",
+    bloom: str = "B2"
+) -> str:
+    """
+    Estandariza el título con el prefijo institucional [Materia][Tema][Bloom].
+    """
+    limpio = re.sub(r"^\[.*?\]\s*", "", titulo_actual).strip()
+    return f"[{materia}][{tema}][{bloom}] {limpio}"
+
+
 def convertir_windows1252_a_utf8(contenido_bytes: bytes) -> str:
     """
     Convierte bytes con codificación Windows-1252 / Latin-1 a string UTF-8 limpio.
@@ -129,6 +484,148 @@ def convertir_windows1252_a_utf8(contenido_bytes: bytes) -> str:
         return contenido_bytes.decode("cp1252", errors="replace")
 
 
+# ---------------------------------------------------------------------------
+# Reporte Markdown
+# ---------------------------------------------------------------------------
+
+def _lista(lineas: List[str], items: List[dict], formato_item, max_items: int) -> None:
+    mostrados = items if not max_items else items[:max_items]
+    for item in mostrados:
+        archivo = f" — `{item['archivo']}`" if item.get("archivo") else ""
+        lineas.append(f"- {formato_item(item)}{archivo}")
+    if len(items) > len(mostrados):
+        lineas.append(f"- … y {len(items) - len(mostrados)} más (`--max-items 0` las muestra todas)")
+    lineas.append("")
+
+
+def _pct(parte: int, total: int) -> str:
+    return f"{(parte / total * 100):.1f}%" if total else "—"
+
+
+def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: int = 50) -> str:
+    """Informe de salud en Markdown a partir del resultado de `auditar_archivos`."""
+    est = resultado["estructura"]
+    pct = resultado["porcentajes"]
+    fb = resultado["retroalimentacion"]
+    opc = resultado["opciones"]
+    lon = resultado["longitud"]
+    cod = resultado["codigo"]
+    enl = resultado["enlaces"]
+    arch = resultado["archivos"]
+    total = est["total_preguntas"]
+
+    lineas = [f"# 🏥 Informe de Salud del Banco de Preguntas: `{nombre}`\n"]
+
+    lineas.append("## Estadísticas Generales")
+    formatos = " · ".join(f"{k.upper()}: {v}" for k, v in sorted(arch["por_formato"].items()))
+    lineas.append(f"- **Archivos:** {arch['total']} ({formatos})" if formatos else f"- **Archivos:** {arch['total']}")
+    lineas.append(f"- **Total Preguntas Evaluadas:** {total}")
+    if est["por_tipo"]:
+        lineas.append("- **Por tipo:** " + ", ".join(f"{t} {n}" for t, n in est["por_tipo"].items()))
+    lineas.append(f"- **Cobertura de Feedback:** {fb['porcentaje_cobertura']}% ({fb['sin_feedback_count']} sin explicación)")
+    lineas.append(f"- **Opciones con feedback:** {fb['porcentaje_opciones_con_feedback']}% "
+                  f"({fb['opciones_con_feedback']} de {fb['opciones_total']})")
+    lineas.append(f"- **Enlaces Sospechosos / HTTP:** {len(enl['urls_sospechosas'])}\n")
+    if arch["errores"]:
+        lineas.append(f"> [!CAUTION]\n> {len(arch['errores'])} archivos no se pudieron interpretar.\n")
+        _lista(lineas, arch["errores"], lambda e: e["error"], max_items)
+
+    lineas.append("## Calidad y Claves de Corrección")
+    if pct["ok"]:
+        lineas.append("> [!NOTE]\n> Todas las claves de corrección son consistentes y usan porcentajes que Moodle acepta.\n")
+    if pct["preguntas_inconsistentes"]:
+        lineas.append(f"> [!WARNING]\n> Se detectaron {len(pct['preguntas_inconsistentes'])} preguntas donde los porcentajes no suman 100%.\n")
+        _lista(lineas, pct["preguntas_inconsistentes"],
+               lambda i: f"{i['titulo']} (suma {i['suma_positivos']:g}%)", max_items)
+    if pct["preguntas_sin_correcta"]:
+        lineas.append(f"> [!WARNING]\n> {len(pct['preguntas_sin_correcta'])} preguntas no tienen ninguna respuesta con puntaje positivo.\n")
+        _lista(lineas, pct["preguntas_sin_correcta"], lambda i: i["titulo"], max_items)
+    if pct["fracciones_invalidas"]:
+        lineas.append(f"> [!CAUTION]\n> {len(pct['fracciones_invalidas'])} preguntas usan porcentajes que Moodle "
+                      "rechaza al importar (la pregunta se descarta).\n")
+        _lista(lineas, pct["fracciones_invalidas"],
+               lambda i: f"{i['titulo']} ({', '.join(f'{f:g}%' for f in i['fracciones'])})", max_items)
+
+    lineas.append("## Retroalimentación")
+    lineas.append(f"- Con feedback general: {fb['con_feedback_global']} de {fb['total_preguntas']} "
+                  f"({fb['porcentaje_feedback_global']}%)")
+    lineas.append(f"- Sin ningún feedback: {fb['sin_feedback_count']}")
+    lineas.append(f"- Con feedback en sólo algunas opciones: {len(fb['preguntas_feedback_parcial'])}\n")
+    if fb["preguntas_sin_feedback"]:
+        lineas.append("### Preguntas sin feedback")
+        _lista(lineas, fb["preguntas_sin_feedback"], lambda i: i["titulo"], max_items)
+    if fb["preguntas_feedback_parcial"]:
+        lineas.append("### Opciones sin feedback")
+        _lista(lineas, fb["preguntas_feedback_parcial"],
+               lambda i: f"{i['titulo']} ({i['opciones_sin_feedback']} de {i['opciones']})", max_items)
+
+    lineas.append("## Cantidad de Opciones")
+    if opc["distribucion_mc"]:
+        lineas.append("| Opciones | Preguntas de opción múltiple |\n| :-- | --: |")
+        lineas.extend(f"| {k} | {v} |" for k, v in opc["distribucion_mc"].items())
+        lineas.append(f"\nPromedio: {opc['promedio_mc']} opciones.\n")
+    if opc["preguntas_pocas_opciones"]:
+        lineas.append(f"> [!WARNING]\n> {len(opc['preguntas_pocas_opciones'])} preguntas tienen menos opciones "
+                      f"de las recomendadas (opción múltiple: {opc['minimo']}, emparejamiento: {MIN_PARES_MATCHING}).\n")
+        _lista(lineas, opc["preguntas_pocas_opciones"],
+               lambda i: f"{i['titulo']} ({i['tipo']}, {i['opciones']})", max_items)
+    if opc["preguntas_opciones_repetidas"]:
+        lineas.append(f"> [!WARNING]\n> {len(opc['preguntas_opciones_repetidas'])} preguntas repiten una opción.\n")
+        _lista(lineas, opc["preguntas_opciones_repetidas"],
+               lambda i: f"{i['titulo']} ({'; '.join(i['repetidas'])[:80]})", max_items)
+
+    lineas.append("## Longitud Relativa de las Respuestas")
+    lineas.append(f"- Preguntas de opción múltiple revisadas: {lon['preguntas_revisadas']}")
+    lineas.append(f"- La correcta es la opción más larga en {lon['correcta_es_la_mas_larga']} preguntas "
+                  f"(por azar se esperarían ≈{lon['correcta_es_la_mas_larga_esperado']:g})")
+    lineas.append(f"- Correcta ≥ {lon['umbral']:g}× más larga que los distractores: {len(lon['preguntas_correcta_mas_larga'])}")
+    lineas.append(f"- Correcta ≤ 1/{lon['umbral']:g} del largo de los distractores: {len(lon['preguntas_correcta_mas_corta'])}\n")
+    if lon["correcta_es_la_mas_larga"] > 1.5 * lon["correcta_es_la_mas_larga_esperado"] + 2:
+        lineas.append("> [!WARNING]\n> La respuesta correcta es la más larga mucho más seguido que por azar: "
+                      "la longitud funciona como pista.\n")
+    for clave, titulo in (("preguntas_correcta_mas_larga", "Correcta notablemente más larga"),
+                          ("preguntas_correcta_mas_corta", "Correcta notablemente más corta")):
+        if lon[clave]:
+            lineas.append(f"### {titulo}")
+            _lista(lineas, sorted(lon[clave], key=lambda i: -abs(i["razon"] - 1)),
+                   lambda i: f"{i['titulo']} (×{i['razon']:g}: {i['largo_correcta']:g} vs {i['largo_distractores']:g} caracteres)",
+                   max_items)
+
+    lineas.append("## Código")
+    lineas.append(f"- Secciones de código: {cod['secciones']}")
+    lineas.append(f"- Sin proteger para GIFT (`{{ }} = ~ # \\` o `//` sin fullwidth ni escape): {cod['sin_proteger']}")
+    lineas.append(f"- Con marcas no canónicas (U+2007, NBSP, `;` griego… en lugar de `·` y `；`): {cod['variantes']}")
+    lineas.append(f"- Con líneas en blanco sin `↵`: {cod['lineas_vacias']}\n")
+    if cod["archivos"]:
+        lineas.append("> [!TIP]\n> `questions format --fullwidth` protege el código y agrega las marcas `·` y `↵`.\n")
+        _lista(lineas, cod["archivos"],
+               lambda i: f"{i['sin_proteger']} sin proteger, {i['variantes']} con variantes, {i['lineas_vacias']} con líneas en blanco",
+               max_items)
+
+    lineas.append("## Enlaces y HTML")
+    lineas.append(f"- URLs: {enl['total_urls']} ({len(enl['urls_sospechosas'])} sospechosas)")
+    lineas.append(f"- Archivos con HTML obsoleto (`<font>`, `<center>`, `style=`): {len(resultado['html_obsoleto'])}\n")
+    if enl["urls_sospechosas"]:
+        _lista(lineas, enl["urls_sospechosas"], lambda u: f"{u['url']} ({u['motivo']})", max_items)
+    if resultado["html_obsoleto"]:
+        lineas.append("> [!TIP]\n> `questions health --clean-html` elimina esas etiquetas y estilos.\n")
+
+    if est["preguntas_sin_titulo"] or est["preguntas_sin_enunciado"] or est["preguntas_codigo_sin_cerrar"]:
+        lineas.append("## Estructura")
+        if est["preguntas_codigo_sin_cerrar"]:
+            lineas.append(f"### Código sin cerrar: un ` o ``` sin pareja ({len(est['preguntas_codigo_sin_cerrar'])})")
+            _lista(lineas, est["preguntas_codigo_sin_cerrar"],
+                   lambda i: f"{i['titulo']} ({i['textos']} textos)", max_items)
+        if est["preguntas_sin_titulo"]:
+            lineas.append(f"### Sin título ({len(est['preguntas_sin_titulo'])})")
+            _lista(lineas, est["preguntas_sin_titulo"], lambda i: i["titulo"], max_items)
+        if est["preguntas_sin_enunciado"]:
+            lineas.append(f"### Sin enunciado ({len(est['preguntas_sin_enunciado'])})")
+            _lista(lineas, est["preguntas_sin_enunciado"], lambda i: i["titulo"], max_items)
+
+    return "\n".join(lineas).rstrip() + "\n"
+
+
 def generar_reporte_salud_markdown(
     archivo_banco: Path,
     contenido: str,
@@ -137,30 +634,9 @@ def generar_reporte_salud_markdown(
     """
     Genera un informe completo de salud del banco en formato Markdown.
     """
-    lineas = [f"# 🏥 Informe de Salud del Banco de Preguntas: `{archivo_banco.name}`\n"]
-    
-    if es_xml:
-        try:
-            root = ET.fromstring(contenido)
-            pregs = root.findall(".//question")
-            lineas.append(f"- **Total de preguntas XML:** {len(pregs)}")
-            lineas.append(f"- **Compatibilidad Moodle 3.9 - 4.4+:** Conforme (Esquema Moodle XML válido)\n")
-        except Exception as e:
-            lineas.append(f"> [!WARNING]\n> Error parseando XML: {e}\n")
-    else:
-        res_pct = verificar_porcentajes_opciones(contenido)
-        res_fb = auditar_retroalimentaciones(contenido)
-        res_url = auditar_enlaces_y_multimedia(contenido)
-
-        lineas.append("## Estadísticas Generales")
-        lineas.append(f"- **Total Preguntas Evaluadas:** {res_pct['total_preguntas']}")
-        lineas.append(f"- **Cobertura de Feedback:** {res_fb['porcentaje_cobertura']}% ({res_fb['sin_feedback_count']} sin explicación)")
-        lineas.append(f"- **Enlaces Sospechosos / HTTP:** {len(res_url['urls_sospechosas'])}\n")
-
-        lineas.append("## Calidad y Claves de Corrección")
-        if res_pct["ok"]:
-            lineas.append("> [!NOTE]\n> Todas las preguntas con porcentajes de corrección parcial suman exactamente 100%.\n")
-        else:
-            lineas.append(f"> [!WARNING]\n> Se detectaron {len(res_pct['preguntas_inconsistentes'])} preguntas donde los porcentajes no suman 100%.\n")
-
-    return "\n".join(lineas)
+    ruta = Path(archivo_banco)
+    formato = "xml" if es_xml else "gift"
+    if formato_de(ruta) != formato:
+        ruta = ruta.with_suffix(f".{formato}")
+    resultado = auditar_archivos([ruta], contenidos={ruta: contenido})
+    return generar_reporte_markdown(resultado, Path(archivo_banco).name)
