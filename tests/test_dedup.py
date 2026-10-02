@@ -1,5 +1,6 @@
 """`questions dedup`: eliminar duplicados (GIFT y XML), log de eliminaciones y TUI de revisión."""
 
+import asyncio
 import contextlib
 import io
 import json
@@ -129,3 +130,37 @@ def test_revision_manual(tmp_path):
     assert [(g.conservada, [u for u, _ in g.duplicadas]) for g in revision.grupos()] == [(c, [principal])]
     revision.conservar_todas(0)
     assert revision.grupos() == []
+
+
+def _tui(raiz, log, teclas):
+    pytest.importorskip("textual", reason="TUI: requiere el extra opcional 'tui' (uv sync --extra tui)")
+    from questions.tui.dedup import DedupApp
+
+    archivos, unidades = _leer(raiz)
+    app = DedupApp(archivos, Revision(agrupar(unidades, 0.9)), 0.9, log)
+
+    async def correr():
+        async with app.run_test(size=(140, 40)) as pilot:
+            for tecla in teclas:
+                await pilot.press(tecla)
+            await pilot.pause()
+        return app.return_value
+
+    return asyncio.run(correr())
+
+
+def test_tui_decide_y_aplica_con_confirmacion(tmp_path):
+    raiz = _banco(tmp_path, {"a.gift": COMPLETA, "b.gift": PREGUNTA.format(n=""), "c.gift": PREGUNTA.format(n="")})
+    log = tmp_path / "dedup.log"
+    # Conservar el duplicado que se ve (b) y aplicar: sólo se elimina c.
+    resultado = _tui(raiz, log, ["d", "a", "s"])
+    assert resultado["eliminadas"] == 1
+    assert (raiz / "a.gift").exists() and (raiz / "b.gift").exists() and not (raiz / "c.gift").exists()
+    assert str((raiz / "c.gift").resolve()) in log.read_text(encoding="utf-8")
+
+
+def test_tui_salir_o_cancelar_no_elimina_nada(tmp_path):
+    raiz = _banco(tmp_path, {"a.gift": COMPLETA, "b.gift": PREGUNTA.format(n="")})
+    log = tmp_path / "dedup.log"
+    assert _tui(raiz, log, ["a", "escape", "q"]) is None
+    assert (raiz / "b.gift").exists() and not log.exists()

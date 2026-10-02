@@ -33,6 +33,9 @@ def dedup(
         Path("dedup.log"), "--log",
         help="Con --aplicar, log (TSV, se agrega al final) de cada pregunta eliminada con las rutas completas.",
     ),
+    tui: bool = typer.Option(
+        False, "--tui", help="Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar (extra 'tui').",
+    ),
     output_json: bool = typer.Option(False, "--json", help="Emite los grupos de duplicados como JSON versionado."),
 ):
     """Elimina preguntas duplicadas según un umbral de similitud (GIFT y Moodle XML).
@@ -50,6 +53,25 @@ def dedup(
         archivos = leer_archivos(archivos_rutas)
     unidades = [u for u in unidades_de(archivos) if u.pregunta is not None]
     grupos = agrupar(unidades, similarity, conservar)
+
+    if tui:
+        if not grupos:
+            click.echo(f"No hay duplicados con similitud ≥ {similarity:g} entre {len(unidades)} preguntas.")
+            return
+        try:
+            from questions.tui.dedup import DedupApp
+        except ImportError:
+            fail('La interfaz de terminal requiere el extra opcional \'tui\': '
+                 'uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"')
+        from questions.core.deduplicar import Revision
+
+        resultado = DedupApp(archivos, Revision(grupos), similarity, log).run()
+        if resultado:
+            click.echo(f"Se eliminaron {resultado['eliminadas']} preguntas ({len(resultado['modificados'])} archivos "
+                       f"modificados, {len(resultado['borrados'])} borrados). Registro: {log.resolve()}")
+        else:
+            click.echo("No se eliminó nada.")
+        return
 
     cambios = aplicar(archivos, grupos) if aplicar_cambios else plan(archivos, grupos)
     eliminadas = sum(len(g.duplicadas) for g in grupos)
