@@ -1,3 +1,5 @@
+import contextlib
+import io
 from pathlib import Path
 from typing import List, Optional
 
@@ -5,7 +7,7 @@ import click
 import typer
 
 from questions.core.validator import GiftAnalyzer
-from questions.core.parser import parse_gift_file
+from questions.core.banco import parse_archivo
 
 from questions.commands.common import LLM_OPTION
 
@@ -19,7 +21,7 @@ def validate(
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold para duplicados"),
     output_json: bool = typer.Option(False, "-j", "--json", help="Salida en JSON"),
 ):
-    """Valida archivos o directorios de preguntas GIFT."""
+    """Valida archivos o directorios de preguntas GIFT y Moodle XML."""
     if not paths:
         paths = ['.']
         
@@ -43,13 +45,10 @@ def validate(
     # Procesar archivos individuales
     for f in files_to_validate:
         analyzer.analyze_file(f)
+        result = parse_archivo(f)
         if output_json:
-            result = parse_gift_file(str(f))
             all_results.append(result)
         else:
-            # We already echo something? GiftAnalyzer.analyze_file doesn't echo.
-            # But parse_gift_file does.
-            result = parse_gift_file(str(f))
             if result["success"]:
                 click.echo(f"✅ Archivo válido: {f}")
                 click.echo(f"   Preguntas encontradas: {result['questionCount']}")
@@ -57,9 +56,10 @@ def validate(
                 click.echo(f"❌ Archivo inválido: {f}")
                 click.echo(f"   Error: {result['error']['message']}")
                 
-    # Procesar directorios
-    for d in dirs_to_validate:
-        analyzer.scan_directory(str(d))
+    # Procesar directorios (con --json, el progreso no ensucia la salida)
+    with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
+        for d in dirs_to_validate:
+            analyzer.scan_directory(str(d))
         
     if not output_json:
         if dirs_to_validate or files_to_validate:

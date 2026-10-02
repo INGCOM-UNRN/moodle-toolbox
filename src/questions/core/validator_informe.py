@@ -1,4 +1,4 @@
-"""Generación del informe de texto y de la salida JSON del analizador GIFT."""
+"""Generación del informe de texto y de la salida JSON del analizador de bancos (GIFT / XML)."""
 
 from pathlib import Path
 from typing import Optional
@@ -10,14 +10,16 @@ class InformeMixin:
         lines = []
         
         lines.append("=" * 80)
-        lines.append("INFORME DE EVALUACIÓN DE PREGUNTAS GIFT")
+        lines.append("INFORME DE EVALUACIÓN DE PREGUNTAS (GIFT / MOODLE XML)")
         lines.append("=" * 80)
         lines.append("")
         
         # General summary
         lines.append("📊 RESUMEN GENERAL")
         lines.append("-" * 80)
-        lines.append(f"Total de archivos GIFT: {self.stats.total_files}")
+        lines.append(f"Total de archivos: {self.stats.total_files}")
+        for formato, count in sorted(self.stats.by_format.items()):
+            lines.append(f"  {formato.upper():4s}: {count} archivos, {self.stats.questions_by_format.get(formato, 0)} preguntas")
         lines.append(f"  ✅ Archivos válidos: {self.stats.valid_files}")
         lines.append(f"  ❌ Archivos inválidos: {self.stats.invalid_files}")
         lines.append(f"Total de preguntas: {self.stats.total_questions}")
@@ -85,7 +87,7 @@ class InformeMixin:
         
         # Parse errors
         if self.stats.parse_errors:
-            lines.append("❌ ERRORES DE PARSEO GIFT")
+            lines.append("❌ ERRORES DE PARSEO")
             lines.append("-" * 80)
             for error_info in self.stats.parse_errors:
                 lines.append(f"  {error_info['filepath']}")
@@ -121,9 +123,9 @@ class InformeMixin:
                 q2 = self.all_questions[dup["index2"]]
                 
                 lines.append(f"Duplicado {idx}: Similitud = {dup['similarity']:.3f}")
-                lines.append(f"  Pregunta A ({q1['type']}): {q1['title'][:70]}")
+                lines.append(f"  Pregunta A ({q1['type']}, {q1.get('format', 'gift')}): {q1['title'][:70]}")
                 lines.append(f"    Archivo: {q1['filepath']}")
-                lines.append(f"  Pregunta B ({q2['type']}): {q2['title'][:70]}")
+                lines.append(f"  Pregunta B ({q2['type']}, {q2.get('format', 'gift')}): {q2['title'][:70]}")
                 lines.append(f"    Archivo: {q2['filepath']}")
                 lines.append(f"  Comando: meld -n '{q1['filepath']}' '{q2['filepath']}'")
                 lines.append("")
@@ -168,6 +170,8 @@ class InformeMixin:
         return {
             "stats": {
                 "totalFiles": self.stats.total_files,
+                "byFormat": dict(self.stats.by_format),
+                "questionsByFormat": dict(self.stats.questions_by_format),
                 "validFiles": self.stats.valid_files,
                 "invalidFiles": self.stats.invalid_files,
                 "totalQuestions": self.stats.total_questions,
@@ -189,12 +193,14 @@ class InformeMixin:
                     "question1": {
                         "filepath": self.all_questions[d["index1"]]["filepath"],
                         "title": self.all_questions[d["index1"]]["title"],
-                        "type": self.all_questions[d["index1"]]["type"]
+                        "type": self.all_questions[d["index1"]]["type"],
+                        "format": self.all_questions[d["index1"]].get("format", "gift"),
                     },
                     "question2": {
                         "filepath": self.all_questions[d["index2"]]["filepath"],
                         "title": self.all_questions[d["index2"]]["title"],
-                        "type": self.all_questions[d["index2"]]["type"]
+                        "type": self.all_questions[d["index2"]]["type"],
+                        "format": self.all_questions[d["index2"]].get("format", "gift"),
                     }
                 }
                 for d in self.duplicates

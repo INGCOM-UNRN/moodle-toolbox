@@ -26,7 +26,7 @@ def stats(
     output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo de salida para el informe"),
     output_json: bool = typer.Option(False, "--json", help="Emite las estadísticas como JSON versionado"),
 ):
-    """Genera estadísticas de un directorio de preguntas."""
+    """Genera estadísticas de un repositorio de preguntas (GIFT y Moodle XML)."""
     if not paths:
         paths = ['.']
         
@@ -54,7 +54,7 @@ def similar(
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold de similitud"),
     output_json: bool = typer.Option(False, "--json", help="Emite los pares similares como JSON versionado"),
 ):
-    """Encuentra preguntas similares en un directorio."""
+    """Encuentra preguntas similares o duplicadas en un repositorio (GIFT y Moodle XML, también entre formatos)."""
     if not paths:
         paths = ['.']
         
