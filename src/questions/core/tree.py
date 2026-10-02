@@ -29,10 +29,20 @@ def sanitize_dirname(part: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _protect_backslashes_in_code(text: str) -> str:
-    r"""Reemplaza backslashes (\) por ＼ dentro de bloques de código GIFT."""
+    r"""Reemplaza las barras (\) del código GIFT por ＼, respetando los escapes de GIFT:
+    `\\` es una sola barra (→ ＼), `\{`, `\=`… son símbolos ya protegidos (quedan) y una
+    barra cruda (`\n`, `\0`) se vuelve ＼."""
+
+    def barra(m):
+        siguiente = m.group(1)
+        if siguiente == '\\':
+            return '＼'
+        if siguiente and siguiente in '{}=#~:':
+            return m.group(0)
+        return '＼' + siguiente
 
     def en_bloque(match):
-        return match.group(0).replace('\\', '＼')
+        return re.sub(r'\\([\s\S]?)', barra, match.group(0))
 
     text = re.sub(r'```[^`]*```', en_bloque, text, flags=re.DOTALL)
     text = re.sub(r'(?<!`)(`[^`\n]+`)(?!`)', en_bloque, text)

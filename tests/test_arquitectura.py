@@ -55,3 +55,13 @@ def test_una_pregunta_sin_cerrar_no_se_traga_el_resto():
     assert titulos[-2:] == ["Sana", "Tercera"]
     # Código con línea en blanco y llaves abiertas: sigue siendo una sola pregunta.
     assert len(_bloques_gift(CON_BLANCO)) == 3
+
+
+def test_unify_protege_las_barras_del_codigo_respetando_los_escapes():
+    from questions.core.tree import _protect_backslashes_in_code as proteger
+
+    assert proteger("en C termina con `\\\\0`.") == "en C termina con `＼0`."          # \\ es una barra
+    assert proteger('`printf("\\n")`') == '`printf("＼n")`'                          # barra cruda
+    assert proteger("`a \\{ b \\}`") == "`a \\{ b \\}`"                              # escapes de GIFT
+    assert proteger("```c\nputs(\"\\\\\\\\\");\n```") == "```c\nputs(\"＼＼\");\n```"   # \\\\ son dos
+    assert proteger("fuera \\\\ del código") == "fuera \\\\ del código"
