@@ -265,3 +265,59 @@ class Revision:
             if eliminadas:
                 resultado.append(Grupo(self.principal[g], eliminadas))
         return resultado
+
+
+# ---------------------------------------------------------------------------
+# Confirmación con Jev (TypeSafe): el juicio que la similitud léxica no hace
+# ---------------------------------------------------------------------------
+
+PREGUNTA_MISMA = {
+    "type": "noul",
+    "instructions": "¿`pregunta_a` y `pregunta_b` evalúan exactamente lo mismo, de modo que en un banco de "
+                    "preguntas una de las dos sobra? Dos preguntas casi iguales que piden cosas distintas "
+                    "(otra operación, otro concepto, otra respuesta correcta) NO son la misma.",
+    "criteria": {
+        "true": "Piden lo mismo con otras palabras o con cambios menores: tienen la misma respuesta y evalúan "
+                "el mismo conocimiento.",
+        "false": "Difieren en lo que preguntan (una palabra clave, la operación, el concepto o la respuesta "
+                 "correcta), aunque compartan casi todo el texto o las opciones.",
+    },
+}
+
+
+def confirmar_con_jev(grupos: List[Grupo], cliente, minimo: float = 0.5, concurrencia: int = 4,
+                      exactas: float = 0.999) -> Tuple[List[Grupo], List[dict]]:
+    """Deja en cada grupo sólo los duplicados que Jev confirma (probabilidad ≥ `minimo`).
+
+    Los pares prácticamente idénticos (similitud ≥ `exactas`) no se consultan. Devuelve los
+    grupos filtrados y los pares descartados con su probabilidad.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from questions.core.clasificacion import estado
+
+    pares = [(g, u, s) for g in grupos for u, s in g.duplicadas if s < exactas]
+
+    def consultar(par):
+        g, u, _ = par
+        datos = cliente.consultar(
+            {"pregunta_a": estado(g.conservada.pregunta), "pregunta_b": estado(u.pregunta)},
+            {"misma": PREGUNTA_MISMA},
+        )
+        return datos["answers"]["misma"]["noul"]
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
+        probabilidades = list(ejecutor.map(consultar, pares))
+
+    rechazadas = {id(u): p for (_, u, _), p in zip(pares, probabilidades) if p < minimo}
+    descartados = [
+        {"conserva": str(g.conservada.archivo), "descartado": str(u.archivo), "similitud": round(s, 4),
+         "probabilidad": round(rechazadas[id(u)], 3)}
+        for g, u, s in pares if id(u) in rechazadas
+    ]
+    filtrados = []
+    for g in grupos:
+        duplicadas = [(u, s) for u, s in g.duplicadas if id(u) not in rechazadas]
+        if duplicadas:
+            filtrados.append(Grupo(g.conservada, duplicadas))
+    return filtrados, descartados

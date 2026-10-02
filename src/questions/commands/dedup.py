@@ -33,6 +33,10 @@ def dedup(
         Path("dedup.log"), "--log",
         help="Con --aplicar, log (TSV, se agrega al final) de cada pregunta eliminada con las rutas completas.",
     ),
+    confirmar_jev: bool = typer.Option(
+        False, "--confirmar-jev",
+        help="Confirmar cada par con Jev (TypeSafe): sólo quedan los que evalúan exactamente lo mismo.",
+    ),
     tui: bool = typer.Option(
         False, "--tui", help="Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar (extra 'tui').",
     ),
@@ -53,6 +57,20 @@ def dedup(
         archivos = leer_archivos(archivos_rutas)
     unidades = [u for u in unidades_de(archivos) if u.pregunta is not None]
     grupos = agrupar(unidades, similarity, conservar)
+    descartados = []
+    if confirmar_jev and grupos:
+        from questions.core.clasificacion import ClienteJev
+        from questions.core.deduplicar import confirmar_con_jev
+
+        try:
+            cliente = ClienteJev()
+        except ValueError as e:
+            fail(str(e))
+        grupos, descartados = confirmar_con_jev(grupos, cliente)
+        if not output_json:
+            for d in descartados:
+                click.echo(f"≠ Jev: no son la misma pregunta ({d['probabilidad']:.2f}): {d['descartado']} "
+                           f"↔ {d['conserva']}")
 
     if tui:
         if not grupos:
@@ -87,6 +105,7 @@ def dedup(
             "archivos_modificados": [str(r) for r in cambios["modificados"]],
             "archivos_borrados": [str(r) for r in cambios["borrados"]],
             **({"log": str(log.resolve())} if registradas else {}),
+            **({"descartados_jev": descartados} if confirmar_jev else {}),
         })
         return
 

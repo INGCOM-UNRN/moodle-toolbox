@@ -164,3 +164,32 @@ def test_tui_salir_o_cancelar_no_elimina_nada(tmp_path):
     log = tmp_path / "dedup.log"
     assert _tui(raiz, log, ["a", "escape", "q"]) is None
     assert (raiz / "b.gift").exists() and not log.exists()
+
+
+def test_confirmar_con_jev_descarta_los_que_piden_otra_cosa(tmp_path):
+    from questions.core.deduplicar import confirmar_con_jev
+
+    raiz = _banco(tmp_path, {
+        "a.gift": COMPLETA,
+        "b.gift": PREGUNTA.format(n=""),
+        "c.gift": PREGUNTA.format(n="").replace("::Punteros::", "::Punteros (otra)::"),
+    })
+    _, unidades = _leer(raiz)
+    grupos = agrupar(unidades, 0.85)
+    assert len(grupos[0].duplicadas) == 2
+
+    class Cliente:
+        def __init__(self):
+            self.estados = []
+
+        def consultar(self, state, questions):
+            self.estados.append(state)
+            titulo = state["pregunta_b"].get("titulo", "")
+            return {"answers": {"misma": {"noul": 0.1 if "otra" in titulo else 0.9}}}
+
+    cliente = Cliente()
+    filtrados, descartados = confirmar_con_jev(grupos, cliente, exactas=1.1)
+    assert [u.archivo.name for u, _ in filtrados[0].duplicadas] == ["b.gift"]
+    assert descartados[0]["descartado"].endswith("c.gift") and descartados[0]["probabilidad"] == 0.1
+    assert set(cliente.estados[0]) == {"pregunta_a", "pregunta_b"}
+    assert "Bien" not in str(cliente.estados[0])  # sin feedback
