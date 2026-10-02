@@ -175,6 +175,15 @@ def _compactar(texto: str, contexto: str) -> str:
     return texto
 
 
+def _agregar_metadatos(q: Question, comentario: str) -> None:
+    """La clasificación del comentario que precede a la pregunta (y de sus tags) en `metadata`."""
+    from questions.core.metadatos import leer_clasificacion
+
+    datos = leer_clasificacion(comentario, getattr(q, "tags", None) or [])
+    if datos:
+        q.metadata = {**(q.metadata or {}), **datos}
+
+
 def _leer_gift(ruta: Path) -> Archivo:
     segmentos: list = []
     for bloque in split_gift_questions(ruta.read_text(encoding="utf-8")):
@@ -188,6 +197,7 @@ def _leer_gift(ruta: Path) -> Archivo:
             segmentos.append(bloque)
             continue
         _, marcas = usa_convencion(cuerpo, "gift")
+        _agregar_metadatos(preguntas[0], " ".join(prefijo))
         segmentos.append(Unidad(
             archivo=ruta, formato="gift", texto=_compactar(cuerpo, "gift"), tipo=preguntas[0].type,
             original=bloque, prefijo=prefijo, fullwidth=True, marcas=marcas, forma=_forma(preguntas[0]),
@@ -222,6 +232,8 @@ def _leer_xml(ruta: Path) -> Archivo:
         if q.type not in TIPOS_PROCESABLES:
             segmentos.append(elemento)
             continue
+        anterior = segmentos[-1] if segmentos and getattr(segmentos[-1], "tag", None) is ET.Comment else None
+        _agregar_metadatos(q, anterior.text or "" if anterior is not None else "")
         crudo = ET.tostring(elemento, encoding="unicode")
         fullwidth, marcas = usa_convencion("\n".join(t.text or "" for t in elemento.iter("text")), "xml")
         segmentos.append(Unidad(

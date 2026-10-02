@@ -7,7 +7,7 @@ from questions.core.parser import parse_gift
 def test_metadatos_de_clasificacion_en_gift_y_xml():
     gift = "// [tag:x] [bloom:B3-aplicar] [dificultad-enunciado:3.4/5] [clasificacion:jev-1.13.0 confianza=1]\n::A:: q {T}"
     assert parse_gift(gift)["questions"][0]["metadata"] == {
-        "bloom": "aplicar", "dificultad_enunciado": 3.4, "clasificador": "jev-1.13.0"}
+        "bloom": "aplicar", "dificultad_enunciado": 3.4, "clasificador": "jev-1.13.0", "confianza": [1.0]}
     xml = ('<quiz><!-- question: 1 --><!-- [bloom:B1-recordar] [dificultad-respuestas:2/5] -->'
            '<question type="truefalse"><name><text>x</text></name><questiontext><text>q</text></questiontext>'
            '<tags><tag><text>dificultad-enunciado:4</text></tag></tags></question>'
