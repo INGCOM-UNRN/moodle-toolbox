@@ -2,11 +2,11 @@ import click
 import typer
 from pathlib import Path
 from typing import List, Optional
-from questions.core.banco import expandir_rutas, formato_de
+from questions.core.banco import expandir_rutas, formato_de, formato_por_contenido
 from questions.core.codigo import etiquetar_lenguaje_archivo, transformar_archivo
 from questions.core.naming import rename_to_slug, rename_from_title, set_question_title
 
-from questions.commands.common import LLM_OPTION
+from questions.commands.common import LLM_OPTION, emitir_json
 
 fix_app = typer.Typer(help="Comandos para corregir problemas comunes.")
 
@@ -71,6 +71,57 @@ def name_from_title_cmd(
             modified_count += 1
     
     click.echo(f"\nFinalizado: {modified_count} archivos renombrados.")
+
+@fix_app.command(name="extension")
+def extension_cmd(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
+    json_out: bool = typer.Option(False, "--json", help="Salida en JSON."),
+):
+    """Corrige la extensión según el contenido: .xml con GIFT adentro pasa a .gift y viceversa.
+
+    No pisa archivos existentes: si el destino ya existe, lo informa y sale con código 1.
+    Los archivos cuyo contenido no se reconoce como GIFT ni como Moodle XML quedan como están.
+    """
+    files = expandir_rutas(paths or ['.'], recursive)
+
+    renombrados, conflictos, sin_reconocer = [], [], []
+    for f in sorted(files):
+        try:
+            formato = formato_por_contenido(f.read_text(encoding='utf-8'))
+        except UnicodeDecodeError:
+            formato = None
+        if formato is None:
+            sin_reconocer.append(f)
+            continue
+        if formato == formato_de(f):
+            continue
+        destino = f.with_suffix(f".{formato}")
+        if destino.exists():
+            conflictos.append((f, destino))
+            continue
+        if not dry_run:
+            f.rename(destino)
+        renombrados.append((f, destino))
+
+    if json_out:
+        emitir_json("fix extension", {
+            "simulacion": dry_run,
+            "renombrados": [{"origen": str(o), "destino": str(d)} for o, d in renombrados],
+            "conflictos": [{"origen": str(o), "destino": str(d)} for o, d in conflictos],
+            "sin_reconocer": [str(f) for f in sin_reconocer],
+        })
+    else:
+        for origen, destino in renombrados:
+            click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}{origen} -> {destino}")
+        for origen, destino in conflictos:
+            click.echo(f"✗ {origen}: {destino} ya existe, no se renombra", err=True)
+        for f in sin_reconocer:
+            click.echo(f"? {f}: el contenido no parece GIFT ni Moodle XML", err=True)
+        click.echo(f"\nFinalizado: {len(renombrados)} archivos {'a renombrar' if dry_run else 'renombrados'}.")
+    if conflictos:
+        raise typer.Exit(code=1)
 
 @fix_app.command(name="title-from-name")
 def title_from_name_cmd(

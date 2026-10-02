@@ -6,6 +6,7 @@ extensión, para que validate, analyze y health traten ambos formatos por igual.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Iterable, Optional
 
@@ -19,6 +20,23 @@ def formato_de(ruta: str | Path) -> str | None:
     """'gift' o 'xml' según la extensión (None si no es un banco)."""
     sufijo = Path(ruta).suffix.lower()
     return {".gift": "gift", ".xml": "xml"}.get(sufijo)
+
+
+# Moodle XML: declaración y comentarios opcionales, y luego <quiz> o una <question> suelta.
+_XML_MOODLE = re.compile(r"\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--.*?-->\s*)*<(?:quiz|question)\b", re.DOTALL)
+# GIFT: una categoría, un título ::…:: o un bloque de respuestas {…} (no hace falta el
+# parser, que acepta cualquier texto como pregunta de descripción).
+_GIFT = re.compile(r"^\s*\$CATEGORY:|^\s*::.*?::|\{[^{}]*\}", re.MULTILINE | re.DOTALL)
+
+
+def formato_por_contenido(texto: str) -> str | None:
+    """'gift' o 'xml' según el contenido, sin mirar la extensión (None si no se reconoce)."""
+    texto = texto.lstrip("﻿")
+    if _XML_MOODLE.match(texto) or texto.lstrip().startswith("<?xml"):
+        return "xml"
+    if _GIFT.search(texto):
+        return "gift"
+    return None
 
 
 def buscar_archivos(directorio: str | Path, recursivo: bool = True,

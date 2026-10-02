@@ -173,7 +173,7 @@ def test_dry_run_en_todos_los_comandos_que_escriben(tmp_path):
 
     antes = foto()
     comandos = [
-        ["fix", "slugify"], ["fix", "name-from-title"], ["fix", "title-from-name"],
+        ["fix", "slugify"], ["fix", "name-from-title"], ["fix", "title-from-name"], ["fix", "extension"],
         ["fix", "code-indent"], ["fix", "code-chars"],
         ["xml", "cdata"], ["xml", "clean-tags"], ["xml", "rename"],
         ["split", "--remove"], ["convert", "html-to-md"], ["health", "--clean-html"],
