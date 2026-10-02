@@ -22,7 +22,8 @@ def _bloques_gift(content: str) -> list[str]:
     """Separa las preguntas como el parser (ver `corta_en_blanco`): el código con líneas
     en blanco queda en su pregunta y una pregunta sin cerrar no se traga las siguientes."""
     lineas = content.split("\n")
-    bloques, actual = [], []
+    bloques: list[str] = []
+    actual: list[str] = []
     for i, linea in enumerate(lineas):
         if not linea.strip():
             if not actual:

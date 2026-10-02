@@ -1,11 +1,13 @@
 import os
 from pathlib import Path
+from typing import Optional
+
 from dotenv import load_dotenv, set_key
 
 CONFIG_DIR = Path.home() / ".questions"
 ENV_FILE = CONFIG_DIR / ".env"
 
-def get_api_key() -> str:
+def get_api_key() -> Optional[str]:
     """Obtiene la API Key desde el entorno o el archivo de configuración global."""
     # 1. Intentar desde el entorno (incluye .env local si existe)
     load_dotenv()

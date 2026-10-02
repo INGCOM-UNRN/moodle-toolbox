@@ -68,8 +68,8 @@ def archivos_cambiados(desde: str, rutas: Iterable[str | Path] = ()) -> set:
     sin seguimiento), como rutas absolutas. Error si las rutas no están en un repo git."""
     import subprocess
 
-    rutas = [Path(r) for r in rutas] or [Path.cwd()]
-    base = rutas[0].resolve()
+    carpetas = [Path(r) for r in rutas] or [Path.cwd()]
+    base = carpetas[0].resolve()
     base = base if base.is_dir() else base.parent
 
     def git(*args) -> str:

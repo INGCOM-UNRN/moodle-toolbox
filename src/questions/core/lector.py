@@ -45,16 +45,23 @@ class Unidad:
     formato: str               # 'gift' o 'xml'
     texto: str                 # GIFT compacto que recibe el modelo
     tipo: str                  # tipo del modelo unificado
+    pregunta: Question         # modelo unificado del original
     original: str = ""         # texto original (para medir el ahorro)
     prefijo: List[str] = field(default_factory=list)  # comentarios GIFT
     elemento: Optional[ET.Element] = None             # <question> original (XML)
     fullwidth: bool = True     # el código original usaba símbolos fullwidth
     marcas: bool = False       # el código original usaba marcas · / ↵
     forma: tuple = ()          # ver _forma
-    pregunta: Optional[Question] = None               # modelo unificado del original
     parcial: str = ""          # "feedback" | "distractores": sólo se agrega eso al original
     procesado: List[Question] = field(default_factory=list)
     procesado_gift: List[str] = field(default_factory=list)
+
+    @property
+    def nodo(self) -> ET.Element:
+        """El <question> original de una unidad XML."""
+        if self.elemento is None:
+            raise ValueError(f"{self.archivo}: la unidad no viene de un Moodle XML")
+        return self.elemento
 
 
 @dataclass

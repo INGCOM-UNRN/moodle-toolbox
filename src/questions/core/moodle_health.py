@@ -568,8 +568,8 @@ def auditar_archivos(
     preguntas: List[dict] = []
     errores: List[dict] = []
     por_formato: Counter = Counter()
-    enlaces = {"total_urls": 0, "urls_sospechosas": [], "todas_validas": True}
-    codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
+    enlaces: Dict[str, Any] = {"total_urls": 0, "urls_sospechosas": [], "todas_validas": True}
+    codigo: Dict[str, Any] = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
               "comentarios": 0, "sin_lenguaje": 0}
     archivos_codigo: List[dict] = []
     html_obsoleto: List[dict] = []

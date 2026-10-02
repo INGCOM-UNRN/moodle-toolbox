@@ -1,7 +1,7 @@
 """Modelo de datos GIFT: tipos de pregunta y estructuras."""
 
 from dataclasses import dataclass, field, asdict
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from enum import Enum
 
@@ -73,7 +73,7 @@ class Question:
 
     def to_dict(self) -> dict:
         """Convert to dictionary, excluding None values and empty lists."""
-        result = {"type": self.type}
+        result: Dict[str, Any] = {"type": self.type}
         if self.title:
             result["title"] = self.title
         if self.stem:

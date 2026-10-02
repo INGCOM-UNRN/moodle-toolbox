@@ -89,3 +89,10 @@ source = ["questions"]
 [tool.hatch.metadata]
 # Las dependencias del ecosistema son referencias directas a git (nunca por nombre en PyPI).
 allow-direct-references = true
+
+[tool.mypy]
+# Chequeo de tipos del núcleo (src/questions/core): `uvx mypy`. Las dependencias
+# opcionales (google-genai, anthropic, textual…) no siempre están instaladas.
+python_version = "3.11"
+files = ["src/questions/core"]
+ignore_missing_imports = true

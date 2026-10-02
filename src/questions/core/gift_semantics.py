@@ -68,7 +68,7 @@ class GiftSemantics:
     
     def _extract_tags_and_id(self, comments: list) -> tuple:
         """Extract tags and ID from comment lines."""
-        tags = []
+        tags: list = []
         question_id = None
         
         if not comments:

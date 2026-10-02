@@ -3,6 +3,7 @@
 import math
 import re
 from collections import defaultdict
+from typing import Dict, Optional
 
 # Pesos de la similitud combinada: coseno TF-IDF y Jaccard (más estricto).
 PESO_COSENO = 0.4
@@ -10,6 +11,11 @@ PESO_JACCARD = 0.6
 
 
 class SimilitudMixin:
+    # Atributos que define AnalizadorBanco (el mixin no se usa solo).
+    all_questions: list
+    duplicates: list
+    similarity_threshold: float
+
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text for comparison."""
         text = text.lower()
@@ -27,14 +33,14 @@ class SimilitudMixin:
     def _compute_word_freq(self, text: str) -> dict:
         """Compute word frequency."""
         words = self._tokenize(text)
-        freq = defaultdict(int)
+        freq: Dict[str, int] = defaultdict(int)
         for word in words:
             freq[word] += 1
         return dict(freq)
     
     def _compute_idf(self, all_texts: list) -> dict:
         """Compute IDF (inverse document frequency)."""
-        doc_count = defaultdict(int)
+        doc_count: Dict[str, int] = defaultdict(int)
         num_docs = len(all_texts)
         
         for text in all_texts:
@@ -66,7 +72,7 @@ class SimilitudMixin:
         
         return tfidf
     
-    def _cosine_similarity(self, vec1: dict, vec2: dict, mag1: float = None, mag2: float = None) -> float:
+    def _cosine_similarity(self, vec1: dict, vec2: dict, mag1: Optional[float] = None, mag2: Optional[float] = None) -> float:
         """Compute cosine similarity."""
         if not vec1 or not vec2:
             return 0.0

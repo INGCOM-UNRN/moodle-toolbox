@@ -470,8 +470,9 @@ def aplicar_a_xml(original: ET.Element, q: Question, unidad: Unidad, variacion: 
     formato = qt.get("format") or "html"
     if q.global_feedback is not None or el.find("generalfeedback") is not None:
         _poner_texto(_hijo(el, "generalfeedback", formato), adaptar(q.global_feedback.text if q.global_feedback else ""))
-    if variacion and el.find("idnumber") is not None:
-        el.find("idnumber").text = None
+    idnumber = el.find("idnumber")
+    if variacion and idnumber is not None:
+        idnumber.text = None
 
     hijos = list(el)
 
@@ -513,10 +514,10 @@ def aplicar_a_xml(original: ET.Element, q: Question, unidad: Unidad, variacion: 
         if q.type == "MC" and single is not None:
             single.text = "true" if any(c.is_correct and c.weight is None for c in q.choices) else "false"
     elif q.type == "TF":
-        viejas = {(a.findtext("text") or "").strip().lower(): a for a in el.findall("answer")}
+        por_valor = {(a.findtext("text") or "").strip().lower(): a for a in el.findall("answer")}
         nuevas = []
         for valor, retro in (("true", q.true_feedback), ("false", q.false_feedback)):
-            a = copy.deepcopy(viejas[valor]) if valor in viejas else ET.Element("answer")
+            a = copy.deepcopy(por_valor[valor]) if valor in por_valor else ET.Element("answer")
             a.set("fraction", "100" if q.is_true == (valor == "true") else "0")
             _poner_texto(a, valor)
             _poner_texto(_hijo(a, "feedback", formato), adaptar(retro.text if retro else ""))
@@ -540,15 +541,20 @@ def escribir_xml(archivo: Archivo) -> str:
         if not isinstance(s, Unidad):
             quiz.append(s)
         elif not s.procesado:
-            quiz.append(s.elemento)
+            quiz.append(s.nodo)
         elif s.parcial == "feedback":
-            quiz.append(agregar_feedback_xml(s.elemento, s.procesado[0], s))
+            quiz.append(agregar_feedback_xml(s.nodo, s.procesado[0], s))
         elif s.parcial == "distractores":
-            quiz.append(agregar_distractores_xml(s.elemento, s.procesado[0], s))
+            quiz.append(agregar_distractores_xml(s.nodo, s.procesado[0], s))
         else:
             for i, q in enumerate(s.procesado):
-                quiz.append(aplicar_a_xml(s.elemento, q, s, variacion=i > 0))
+                quiz.append(aplicar_a_xml(s.nodo, q, s, variacion=i > 0))
     return serializar_quiz(quiz)
+
+
+def _formato_enunciado(el: ET.Element) -> str:
+    enunciado = el.find("questiontext")
+    return (enunciado.get("format") if enunciado is not None else None) or "html"
 
 
 def agregar_distractores_xml(original: ET.Element, q: Question, unidad: Unidad) -> ET.Element:
@@ -563,7 +569,7 @@ def agregar_distractores_xml(original: ET.Element, q: Question, unidad: Unidad) 
 
     el = copy.deepcopy(original)
     respuestas = el.findall("answer")
-    formato = (el.find("questiontext").get("format") if el.find("questiontext") is not None else None) or "html"
+    formato = _formato_enunciado(el)
     plantilla = next((a for a in respuestas if a.get("fraction", "0") in ("0", "0.0")), respuestas[0] if respuestas else None)
     posicion = list(el).index(respuestas[-1]) + 1 if respuestas else len(list(el))
     for i, c in enumerate(q.choices[len(respuestas):]):
@@ -587,7 +593,7 @@ def agregar_feedback_xml(original: ET.Element, q: Question, unidad: Unidad) -> E
             return transformar_codigo(texto or "", contexto="xml", fullwidth=False)[0]
 
     el = copy.deepcopy(original)
-    formato = (el.find("questiontext").get("format") if el.find("questiontext") is not None else None) or "html"
+    formato = _formato_enunciado(el)
 
     def completar(padre: ET.Element, tag: str, ft) -> None:
         if not _hay(ft):
@@ -704,6 +710,8 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
         if in_place:
             destino = ruta.parent / f"{ruta.stem}{suffix}{ruta.suffix}" if suffix else ruta
         else:
+            if output_dir is None:
+                raise ValueError("Sin --in-place hace falta un directorio de salida.")
             destino = output_dir / ruta.parent.resolve().relative_to(base) / f"{ruta.stem}_{mode}{ruta.suffix}"
             destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(contenido, encoding="utf-8")

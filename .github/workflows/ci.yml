@@ -47,6 +47,9 @@ jobs:
       - name: Errores de Python e importaciones sin uso (ruff E9, F63, F7, F82, F401, F841)
         run: uvx ruff check --select E9,F63,F7,F82,F401,F841 .
 
+      - name: Tipos del núcleo (mypy sobre src/questions/core)
+        run: uvx mypy
+
       - name: Dependencias con vulnerabilidades conocidas (pip-audit)
         run: |
           uv export --format requirements-txt --no-hashes --no-emit-project --all-extras --all-groups > "$RUNNER_TEMP/requisitos.txt"

@@ -1,10 +1,21 @@
 """Generación del informe de texto y de la salida JSON del analizador de bancos (GIFT / XML)."""
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from questions.core.validator import GiftStats
 
 
 class InformeMixin:
+    # Atributos que define AnalizadorBanco (el mixin no se usa solo).
+    stats: "GiftStats"
+    issues: list
+    all_questions: list
+    duplicates: list
+    descriptions: list
+    similarity_threshold: float
+
     def generate_report(self, output_file: Optional[str] = None) -> str:
         """Generate the analysis report."""
         lines = []

@@ -30,7 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from questions.core.lector import Archivo, Unidad, _compactar, leer_archivos, unidades_de
 from questions.core.cache import Cache
@@ -156,7 +156,7 @@ def estado(q: Question, contexto: str = CONTEXTO) -> dict:
     enunciado = _t(q.stem)
     if len(enunciado) > MAX_ENUNCIADO:
         enunciado = enunciado[:MAX_ENUNCIADO] + "\n[…enunciado recortado…]"
-    datos = {"contexto": contexto, "tipo": _TIPOS.get(q.type, q.type), "enunciado": enunciado}
+    datos: Dict[str, Any] = {"contexto": contexto, "tipo": _TIPOS.get(q.type, q.type), "enunciado": enunciado}
     if q.title:
         datos["titulo"] = q.title
     if q.type == "MC":
@@ -236,7 +236,7 @@ class Clasificacion:
         confianzas = [self.bloom_confianza, self.enunciado_confianza]
         if self.respuestas is not None:
             partes.append(f"[dificultad-respuestas:{self.respuestas:g}/5]")
-            confianzas.append(self.respuestas_confianza)
+            confianzas.append(self.respuestas_confianza or 0.0)
         partes.append(f"{MARCA}{self.modelo} confianza={','.join(f'{c:g}' for c in confianzas)}]")
         if tags:
             partes += [f"[tag:{t}]" for t in self.tags()]
@@ -363,9 +363,9 @@ def escribir(archivo: Archivo, resultados: Dict[int, Clasificacion], tags: bool)
             if id(s) in resultados:
                 c = resultados[id(s)]
                 quiz.append(ET.Comment(f" {c.comentario()} "))
-                quiz.append(_pregunta_xml(s.elemento, c, tags))
+                quiz.append(_pregunta_xml(s.nodo, c, tags))
             else:
-                quiz.append(s.elemento)
+                quiz.append(s.nodo)
         else:
             quiz.append(s)
     return serializar_quiz(quiz)
@@ -457,6 +457,8 @@ def run_clasificacion(file_paths: List[Path], output_dir: Optional[Path], in_pla
         if in_place:
             destino = ruta.parent / f"{ruta.stem}{suffix}{ruta.suffix}" if suffix else ruta
         else:
+            if output_dir is None:
+                raise ValueError("Sin --in-place hace falta un directorio de salida.")
             destino = output_dir / ruta.parent.resolve().relative_to(base) / f"{ruta.stem}_classify{ruta.suffix}"
             destino.parent.mkdir(parents=True, exist_ok=True)
         destino.write_text(escribir(archivo, resultados, tags), encoding="utf-8")
@@ -549,7 +551,7 @@ def medir_concordancia(resultados: List[tuple], sin_encontrar: int = 0) -> Dict:
     n = len(resultados)
     matriz = {a: {b: 0 for b in niveles} for a in niveles}
     exactas = adyacentes = 0
-    errores = {"enunciado": [], "respuestas": []}
+    errores: Dict[str, List[float]] = {"enunciado": [], "respuestas": []}
     for ref, c in resultados:
         matriz[ref["bloom"]][c.bloom] += 1
         distancia = abs(niveles.index(ref["bloom"]) - niveles.index(c.bloom))

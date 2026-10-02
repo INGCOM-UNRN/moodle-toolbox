@@ -145,7 +145,7 @@ def escribir(archivo: Archivo, segmentos: list) -> str:
         return "\n\n".join(s.original if isinstance(s, Unidad) else s for s in segmentos) + "\n"
     quiz = ET.Element("quiz")
     for s in segmentos:
-        quiz.append(s.elemento if isinstance(s, Unidad) else s)
+        quiz.append(s.nodo if isinstance(s, Unidad) else s)
     return serializar_quiz(quiz)
 
 
@@ -246,7 +246,8 @@ def restaurar(respaldo: Path, forzar: bool = False) -> Dict[str, List[str]]:
 def plan(archivos: List[Archivo], grupos: List[Grupo]) -> Dict[str, List[Path]]:
     """Qué archivos se modificarían y cuáles se borrarían, sin tocarlos."""
     eliminadas = {id(u) for g in grupos for u, _ in g.duplicadas}
-    modificar, borrar = [], []
+    modificar: List[Path] = []
+    borrar: List[Path] = []
     for archivo in archivos:
         if any(isinstance(s, Unidad) and id(s) in eliminadas for s in archivo.segmentos):
             (borrar if _queda_vacio(sin_eliminadas(archivo, eliminadas)) else modificar).append(archivo.ruta)

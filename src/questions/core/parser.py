@@ -59,8 +59,8 @@ class GiftParser:
         questions = []
         lines = content.split('\n')
         
-        current_block = []
-        current_comments = []
+        current_block: list = []
+        current_comments: list = []
         
         i = 0
         while i < len(lines):

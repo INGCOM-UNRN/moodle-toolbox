@@ -57,9 +57,9 @@ def set_question_title(file_path: Path, new_title: str, simular: bool = False) -
             
             # Intentar con regex para mayor fidelidad de formato
             pattern = r'(<name>\s*<text[^>]*>)(.*?)(</text>\s*</name>)'
-            if re.search(pattern, content, re.DOTALL):
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
                 # Ver si el contenido tiene CDATA
-                match = re.search(pattern, content, re.DOTALL)
                 inner_content = match.group(2)
                 if '<![CDATA[' in inner_content:
                     replacement = f'<![CDATA[{new_title}]]>'

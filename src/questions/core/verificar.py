@@ -130,10 +130,10 @@ def preparar_java(codigo: str) -> tuple:
     publica = re.search(r"public\s+(?:final\s+)?class\s+(\w+)", codigo)
     if publica:
         return publica.group(1), importaciones + codigo
-    if re.search(r"\bclass\s+\w+", codigo):
+    clase = re.search(r"\bclass\s+(\w+)", codigo)
+    if clase:
         principal = re.search(r"class\s+(\w+)[^{]*\{[^}]*?static\s+void\s+main", codigo, re.S)
-        nombre = principal.group(1) if principal else re.search(r"class\s+(\w+)", codigo).group(1)
-        return nombre, importaciones + codigo
+        return (principal or clase).group(1), importaciones + codigo
     return "Main", (f"{importaciones}public class Main {{\n"
                     f"public static void main(String[] args) throws Exception {{\n{codigo}\n}}\n}}\n")
 
