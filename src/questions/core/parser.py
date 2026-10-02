@@ -20,6 +20,40 @@ from questions.core.gift_semantics import (  # noqa: F401
 )
 
 
+def _partir_sin_escapar(texto: str, marcas: str) -> list:
+    """Trozos que empiezan en cada carácter de `marcas` sin escapar (sin la marca)."""
+    trozos, actual, en_trozo, i = [], [], False, 0
+    while i < len(texto):
+        c = texto[i]
+        if c == "\\" and i + 1 < len(texto):
+            actual.append(texto[i:i + 2])
+            i += 2
+            continue
+        if c in marcas:
+            if en_trozo:
+                trozos.append("".join(actual))
+            actual, en_trozo = [], True
+        else:
+            actual.append(c)
+        i += 1
+    if en_trozo:
+        trozos.append("".join(actual))
+    return trozos
+
+
+def _separar_flecha(texto: str) -> tuple:
+    """(izquierda, '->', derecha) en el primer -> sin escapar; ('', '', texto) si no hay."""
+    i = 0
+    while i < len(texto) - 1:
+        if texto[i] == "\\":
+            i += 2
+            continue
+        if texto[i:i + 2] == "->":
+            return texto[:i], "->", texto[i + 2:]
+        i += 1
+    return "", "", texto
+
+
 class GiftParser:
     """Parser for GIFT format questions."""
     
@@ -238,7 +272,11 @@ class GiftParser:
             block = block[m_primaria.end():]
 
         # Multiple numerical choices
-        choice_pattern = re.compile(r'([=~])(%[+-]?\d+(?:\.\d+)?%)?([^=~#]*?)(?:#([^=~]*))?(?=[=~]|$)', re.DOTALL)
+        # Los escapes (\\= \\~ \\#) se consumen como una unidad: no cortan la opción.
+        choice_pattern = re.compile(
+            r'(?<!\\)([=~])(%[+-]?\d+(?:\.\d+)?%)?((?:\\.|[^=~#\\])*?)(?:#((?:\\.|[^=~\\])*))?(?=[=~]|$)',
+            re.DOTALL,
+        )
         matches = list(choice_pattern.finditer(block))
 
         if matches:
@@ -273,13 +311,15 @@ class GiftParser:
             global_feedback = semantics._parse_formatted_text(gf_match.group(1))
             block = block[:gf_match.start()]
         
-        # Parse match pairs
-        match_pattern = re.compile(r'=\s*([^->=~]*?)\s*->\s*([^=~\n\r]+)', re.DOTALL)
-        for m in match_pattern.finditer(block):
-            left, right = m.groups()
+        # Cada par empieza en un = sin escapar y se separa en el primer -> sin escapar; los
+        # textos pueden tener guiones, > y escapes (\\= \\~ \\#).
+        for entrada in _partir_sin_escapar(block, "="):
+            izquierda, flecha, derecha = _separar_flecha(entrada)
+            if not flecha:
+                continue
             pairs.append(MatchPair(
-                subquestion=semantics._parse_formatted_text(left),
-                subanswer=semantics._decode_escapes(right.strip())
+                subquestion=semantics._parse_formatted_text(izquierda),
+                subanswer=semantics._decode_escapes(derecha.strip())
             ))
         
         return Question(type="Matching", match_pairs=pairs, global_feedback=global_feedback)
