@@ -14,9 +14,10 @@ def ai(
     llm: bool = LLM_OPTION,
     mode: str = typer.Option(
         "improve", "--mode",
-        click_type=click.Choice(["improve", "multiply", "transform", "feedback", "classify"]),
+        click_type=click.Choice(["improve", "multiply", "transform", "feedback", "distractors", "classify"]),
         help="Modo: improve (mejorar), multiply (variaciones), transform (usar prompt personalizado), "
-             "feedback (completar sólo la retroalimentación que falta) o classify (Bloom y dificultad con Jev).",
+             "feedback (completar sólo la retroalimentación que falta), distractors (agregar distractores donde "
+             "faltan o la correcta delata por su largo) o classify (Bloom y dificultad con Jev).",
     ),
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Prompt personalizado o ruta a un archivo .txt con el prompt."),
     output: Optional[Path] = typer.Option(None, "--output", help="Directorio de salida (por defecto: output_<mode>)."),
@@ -30,6 +31,7 @@ def ai(
     concurrencia: int = typer.Option(4, "--concurrencia", help="classify: solicitudes simultáneas a Jev."),
     reclasificar: bool = typer.Option(False, "--reclasificar", help="classify: volver a clasificar las ya clasificadas."),
     tags: bool = typer.Option(False, "--tags", help="classify: escribir también tags de Moodle (bloom:…, dificultad-…)."),
+    opciones: int = typer.Option(4, "--opciones", help="distractors: cantidad de opciones a alcanzar por pregunta."),
     precio_entrada: Optional[float] = typer.Option(
         None, "--precio-entrada", help="USD por millón de tokens de entrada, para estimar el costo."),
     precio_salida: Optional[float] = typer.Option(
@@ -67,6 +69,9 @@ def ai(
     if prompt and mode == 'improve':
         mode = 'transform'
 
+    from questions.core import ai as ai_core
+
+    ai_core.OPCIONES_OBJETIVO[0] = opciones
     file_paths = expandir_rutas(inputs, recursive)
     if not file_paths:
         fail("No se encontraron archivos .gift o .xml para procesar.")

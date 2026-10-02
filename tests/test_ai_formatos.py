@@ -246,3 +246,47 @@ def test_estimacion_de_tokens_y_costo(tmp_path):
     pocos = ai.estimar_tokens(ai.unidades_de(ai.leer_archivos([tmp_path / "b.gift"])), "improve", None, 5)
     muchos = ai.estimar_tokens(ai.unidades_de(ai.leer_archivos([tmp_path / "b.gift"])), "multiply", None, 5)
     assert pocos["entrada"] > pocos["salida"] > 0 and abs(muchos["salida"] - 3 * pocos["salida"]) <= 3
+
+
+def _con_distractores(n, texto):
+    """Agrega dos distractores nuevos (uno repetido de los existentes, que se ignora)."""
+    lineas = texto.splitlines()
+    cierre = max(i for i, linea in enumerate(lineas) if linea.strip() == "}")
+    lineas[cierre:cierre] = ["\t~Un número aleatorio #confunde con basura", "\t~error", "\t~Una excepción en tiempo de ejecución"]
+    return ["\n".join(lineas)]
+
+
+def test_distractors_agrega_solo_opciones_incorrectas_nuevas(tmp_path):
+    salida = _procesar(tmp_path, "b.gift", GIFT, Modelo(_con_distractores), mode="distractors")
+    q = parse_gift(salida)["questions"][1]
+    textos = [c["text"]["text"] for c in q["choices"]]
+    assert textos == ["`si`", "nada", "error", "Un número aleatorio"]  # hasta 4 opciones, sin repetir "error"
+    assert q["choices"][3]["feedback"]["text"] == "confunde con basura" and not q["choices"][3]["is_correct"]
+
+
+def test_distractors_en_xml_agrega_respuestas_con_fraccion_cero(tmp_path):
+    salida = _procesar(tmp_path, "b.xml", XML, Modelo(_con_distractores), mode="distractors")
+    pregunta = ET.fromstring(salida).findall("question")[1]
+    respuestas = pregunta.findall("answer")
+    assert [a.findtext("text") for a in respuestas] == ["5", "0", "basura", "Un número aleatorio"]
+    assert respuestas[3].get("fraction") == "0" and respuestas[3].get("format") == "markdown"
+    assert pregunta.findtext("penalty") == "0.5"
+
+
+def test_distractors_rechaza_si_cambia_las_opciones_originales(tmp_path):
+    def cambia(n, texto):
+        return [texto.replace("~nada", "~nada de nada") + "\n"]
+
+    salida = _procesar(tmp_path, "b.gift", GIFT, Modelo(cambia), mode="distractors")
+    assert salida == GIFT.strip() + "\n"
+
+
+def test_necesita_distractores():
+    from questions.core.parser import GiftParser
+
+    def modelo(gift):
+        return GiftParser()._manual_parse(gift)[0]
+
+    assert not ai.necesita_distractores(modelo("::A:: q {=a ~b ~c ~d}"), 4)
+    assert ai.necesita_distractores(modelo("::A:: q {=a ~b ~c}"), 4)
+    assert ai.necesita_distractores(modelo("::A:: q {=una respuesta muy larga y detallada ~b ~c ~d}"), 4)

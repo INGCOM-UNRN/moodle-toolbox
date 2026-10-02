@@ -90,7 +90,7 @@ class Unidad:
     marcas: bool = False       # el código original usaba marcas · / ↵
     forma: tuple = ()          # ver _forma
     pregunta: Optional[Question] = None               # modelo unificado del original
-    solo_feedback: bool = False                       # ai --mode feedback: sólo se agrega retro
+    parcial: str = ""          # "feedback" | "distractores": sólo se agrega eso al original
     procesado: List[Question] = field(default_factory=list)
     procesado_gift: List[str] = field(default_factory=list)
 
@@ -223,6 +223,17 @@ def construir_prompt(textos: List[str], mode: str, custom_prompt: Optional[str] 
         if custom_prompt:
             instruccion += f"\nInstrucción adicional: {custom_prompt}"
         salida = "una pregunta por cada una recibida"
+    elif mode == "distractors":
+        instruccion = (
+            f"Sos experto en pedagogía y en el formato GIFT de Moodle. Agregá a cada pregunta distractores (~) "
+            f"plausibles, basados en errores conceptuales comunes del tema, hasta que tenga {OPCIONES_OBJETIVO[0]} "
+            "opciones en total. Si la respuesta correcta es mucho más larga que los distractores, los nuevos "
+            "deben tener un largo parecido al de la correcta. Cada distractor nuevo puede llevar su "
+            "retroalimentación (#). No cambies el enunciado, la respuesta correcta ni los distractores existentes."
+        )
+        if custom_prompt:
+            instruccion += f"\nInstrucción adicional: {custom_prompt}"
+        salida = "una pregunta por cada una recibida"
     else:  # transform
         instruccion = (
             "Sos experto en el formato GIFT de Moodle. Transformá cada pregunta según estas instrucciones:\n"
@@ -310,19 +321,74 @@ def aplicar_respuesta(unidades: List[Unidad], respuesta: Dict[int, List[str]], m
         if not validas:
             sin_cambios += 1
             continue
+        if mode == "distractors":
+            completa, agregados = agregar_distractores(unidad.pregunta, validas[0][1], OPCIONES_OBJETIVO[0])
+            if not agregados:
+                print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): la respuesta no agrega distractores "
+                      "nuevos o cambia los existentes; se conserva el original.")
+                sin_cambios += 1
+                continue
+            unidad.parcial = "distractores"
+            unidad.procesado = [completa]
+            unidad.procesado_gift = [question_to_gift(completa)]
+            continue
         if mode == "feedback":
             # Del resultado sólo se toma la retroalimentación que faltaba; lo demás es el original.
             completa, agregadas = completar_feedback(unidad.pregunta, validas[0][1])
             if not agregadas:
                 sin_cambios += 1
                 continue
-            unidad.solo_feedback = True
+            unidad.parcial = "feedback"
             unidad.procesado = [completa]
             unidad.procesado_gift = [question_to_gift(completa)]
             continue
         unidad.procesado_gift = [g for g, _ in validas]
         unidad.procesado = [q for _, q in validas]
     return sin_cambios
+
+
+OPCIONES_OBJETIVO = [4]  # ai --mode distractors --opciones N (lista para que el prompt la lea)
+
+
+def _normal_opcion(c) -> str:
+    return " ".join(re.sub(r"[`*_]", "", (c.text.text if c.text else "")).lower().split())
+
+
+def necesita_distractores(q: Question, objetivo: int, umbral_largo: float = 1.5) -> bool:
+    """Opción múltiple con menos de `objetivo` opciones o cuya correcta delata por su largo."""
+    if q.type != "MC" or not q.choices:
+        return False
+    if len(q.choices) < objetivo:
+        return True
+    correctas = [len(_normal_opcion(c)) for c in q.choices if c.is_correct or (c.weight or 0) > 0]
+    distractores = [len(_normal_opcion(c)) for c in q.choices if not (c.is_correct or (c.weight or 0) > 0)]
+    return bool(correctas and distractores and min(distractores) > 0
+                and sum(correctas) / len(correctas) >= umbral_largo * sum(distractores) / len(distractores))
+
+
+def agregar_distractores(original: Question, nueva: Question, objetivo: int) -> tuple:
+    """El original más los distractores nuevos de `nueva` (incorrectos y con texto distinto a
+    todas las opciones originales), hasta `objetivo` opciones o dos más que el original.
+
+    Si la respuesta quita o cambia una opción original, o la correcta, no se agrega nada.
+    Devuelve (pregunta, cantidad agregada).
+    """
+    originales = [_normal_opcion(c) for c in original.choices]
+    nuevas = [_normal_opcion(c) for c in nueva.choices]
+    correctas = {_normal_opcion(c) for c in original.choices if c.is_correct or (c.weight or 0) > 0}
+    correctas_nueva = {_normal_opcion(c) for c in nueva.choices if c.is_correct or (c.weight or 0) > 0}
+    if not set(originales) <= set(nuevas) or correctas != correctas_nueva:
+        return original, 0
+    tope = max(objetivo, len(original.choices) + 2) if len(original.choices) >= objetivo else objetivo
+    completa = copy.deepcopy(original)
+    vistos = set(originales)
+    for c, texto in zip(nueva.choices, nuevas):
+        if len(completa.choices) >= tope:
+            break
+        if texto and texto not in vistos and not c.is_correct and not (c.weight or 0) > 0:
+            completa.choices.append(copy.deepcopy(c))
+            vistos.add(texto)
+    return completa, len(completa.choices) - len(original.choices)
 
 
 def _hay(ft) -> bool:
@@ -362,7 +428,8 @@ def completar_feedback(original: Question, nueva: Question) -> tuple:
 
 
 def _clave_cache(model_id: str, mode: str, custom_prompt: Optional[str], unidad: Unidad) -> str:
-    return Cache.clave("ai", model_id, mode, custom_prompt or "", unidad.texto)
+    extra = OPCIONES_OBJETIVO[0] if mode == "distractors" else None
+    return Cache.clave("ai", model_id, mode, custom_prompt or "", extra, unidad.texto)
 
 
 def process_batch(client, model_id: str, unidades: List[Unidad], mode: str,
@@ -531,12 +598,39 @@ def escribir_xml(archivo: Archivo) -> str:
             quiz.append(s)
         elif not s.procesado:
             quiz.append(s.elemento)
-        elif s.solo_feedback:
+        elif s.parcial == "feedback":
             quiz.append(agregar_feedback_xml(s.elemento, s.procesado[0], s))
+        elif s.parcial == "distractores":
+            quiz.append(agregar_distractores_xml(s.elemento, s.procesado[0], s))
         else:
             for i, q in enumerate(s.procesado):
                 quiz.append(aplicar_a_xml(s.elemento, q, s, variacion=i > 0))
     return serializar_quiz(quiz)
+
+
+def agregar_distractores_xml(original: ET.Element, q: Question, unidad: Unidad) -> ET.Element:
+    """Copia el <question> original y agrega al final las respuestas nuevas (fracción 0)."""
+    if unidad.fullwidth:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=True,
+                                      espacios=unidad.marcas, saltos=unidad.marcas)[0]
+    else:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=False)[0]
+
+    el = copy.deepcopy(original)
+    respuestas = el.findall("answer")
+    formato = (el.find("questiontext").get("format") if el.find("questiontext") is not None else None) or "html"
+    plantilla = next((a for a in respuestas if a.get("fraction", "0") in ("0", "0.0")), respuestas[0] if respuestas else None)
+    posicion = list(el).index(respuestas[-1]) + 1 if respuestas else len(list(el))
+    for i, c in enumerate(q.choices[len(respuestas):]):
+        nueva = copy.deepcopy(plantilla) if plantilla is not None else ET.Element("answer", {"format": formato})
+        nueva.set("fraction", "0")
+        _poner_texto(nueva, adaptar(c.text.text if c.text else ""))
+        retro = _hijo(nueva, "feedback", formato)
+        _poner_texto(retro, adaptar(c.feedback.text) if _hay(c.feedback) else "")
+        el.insert(posicion + i, nueva)
+    return el
 
 
 def agregar_feedback_xml(original: ET.Element, q: Question, unidad: Unidad) -> ET.Element:
@@ -584,7 +678,7 @@ def escribir(archivo: Archivo) -> str:
 # ---------------------------------------------------------------------------
 
 CARACTERES_POR_TOKEN = 4  # aproximación usual para texto mayormente ASCII
-SALIDA_POR_MODO = {"multiply": VARIACIONES, "feedback": 1.4}
+SALIDA_POR_MODO = {"multiply": VARIACIONES, "feedback": 1.4, "distractors": 1.4}
 
 
 def estimar_tokens(unidades: List[Unidad], mode: str, custom_prompt: Optional[str], batch_size: int) -> Dict[str, int]:
@@ -622,6 +716,8 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
     unidades = unidades_de(archivos)
     if mode == "feedback":
         unidades = [u for u in unidades if u.pregunta is not None and falta_feedback(u.pregunta)]
+    elif mode == "distractors":
+        unidades = [u for u in unidades if u.pregunta is not None and necesita_distractores(u.pregunta, OPCIONES_OBJETIVO[0])]
     if not unidades:
         print("⚠️ No se encontraron preguntas para procesar.")
         return
