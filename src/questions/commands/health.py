@@ -8,7 +8,7 @@ import typer
 
 from questions.commands.common import con_configuracion, emitir_json, fail
 
-from questions.core.banco import expandir_rutas, formato_de
+from questions.core.banco import expandir_rutas, filtrar_desde, formato_de
 from questions.core.moodle_health import (
     MIN_OPCIONES,
     UMBRAL_LONGITUD,
@@ -40,6 +40,8 @@ def health_cmd(
     estricto: bool = typer.Option(False, "--estricto", help="Salir con código 1 también ante advertencias."),
     output_csv: Optional[Path] = typer.Option(
         None, "--csv", help="Exportar una fila por pregunta con todas las señales (para planillas)."),
+    desde: Optional[str] = typer.Option(
+        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
     """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces.
@@ -53,6 +55,14 @@ def health_cmd(
         opciones["min_opciones"], opciones["umbral_longitud"], opciones["max_items"])
     archivos = expandir_rutas(rutas, recursive)
     archivos = [a for a in archivos if formato_de(a)]
+    if desde:
+        try:
+            archivos = filtrar_desde(archivos, desde, rutas)
+        except ValueError as e:
+            fail(str(e))
+        if not archivos:
+            click.echo(f"No hay archivos de preguntas cambiados desde {desde}.")
+            return
     if not archivos:
         sugerencia = ""
         if not recursive and any(r.is_dir() and expandir_rutas([r], True) for r in rutas):

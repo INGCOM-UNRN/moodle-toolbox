@@ -5,7 +5,7 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.core.banco import expandir_rutas, formato_de
+from questions.core.banco import expandir_rutas, filtrar_desde, formato_de
 from questions.core.codigo import transformar_archivo
 from questions.core.formatter import format_content
 
@@ -34,6 +34,8 @@ def format_cmd(
         False, "--check", help="No escribir: salir con código 1 si algún archivo cambiaría (para CI y pre-commit)."
     ),
     diff: bool = typer.Option(False, "--diff", help="No escribir: mostrar los cambios como diff unificado."),
+    desde: Optional[str] = typer.Option(
+        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
 ):
     """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵).
 
@@ -53,6 +55,11 @@ def format_cmd(
     transforma_codigo = code or fullwidth or normal
     extensiones = (".gift", ".xml", ".md") if transforma_codigo else (".gift", ".xml")
     files = expandir_rutas(paths, recursive, extensiones)
+    if desde:
+        try:
+            files = filtrar_desde(files, desde, paths)
+        except ValueError as e:
+            fail(str(e))
 
     if not files:
         click.echo("No se encontraron archivos para procesar.")

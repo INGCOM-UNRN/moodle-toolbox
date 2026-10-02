@@ -12,7 +12,7 @@ import typer
 
 from questions.commands.common import LLM_OPTION, emitir_json, fail
 from questions.core.ai import leer_archivos, unidades_de
-from questions.core.banco import expandir_rutas
+from questions.core.banco import expandir_rutas, filtrar_desde
 from questions.core.verificar import PROBLEMAS, verificar
 
 _ETIQUETAS = {
@@ -39,6 +39,8 @@ def verify(
         help="Revisar el código C con las reglas de estilo de la cátedra (0x00XXh, requiere ripley). No cambia el código de salida."),
     concurrencia: int = typer.Option(4, "--concurrencia", help="Compilaciones simultáneas."),
     solo_problemas: bool = typer.Option(False, "--solo-problemas", help="Listar sólo las preguntas con problemas."),
+    desde: Optional[str] = typer.Option(
+        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     output_json: bool = typer.Option(False, "--json", help="Emite los resultados como JSON versionado."),
 ):
     """Compila y ejecuta el código de las preguntas de salida y compara con las opciones (gcc, javac).
@@ -48,6 +50,14 @@ def verify(
     aparecen literalmente en las opciones se listan para revisar, sin fallar.
     """
     archivos_rutas = expandir_rutas(paths or [Path(".")], recursive)
+    if desde:
+        try:
+            archivos_rutas = filtrar_desde(archivos_rutas, desde, paths)
+        except ValueError as e:
+            fail(str(e))
+        if not archivos_rutas:
+            click.echo(f"No hay archivos de preguntas cambiados desde {desde}.")
+            return
     if not archivos_rutas:
         fail("No se encontraron archivos de preguntas (.gift / .xml).")
     with contextlib.redirect_stdout(io.StringIO()):

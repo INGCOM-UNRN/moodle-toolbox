@@ -89,3 +89,50 @@ def test_configuracion_contexto_de_classify(tmp_path, monkeypatch):
     raiz = _banco_con_config(tmp_path, '[ai]\ncontexto = "Programación 1 (C)"\n')
     res = runner.invoke(cli, ["ai", str(raiz / "temas"), "--mode", "classify", "--dry-run"])
     assert '"contexto": "Programación 1 (C)"' in res.output
+
+
+def _git(raiz, *args):
+    import subprocess
+
+    subprocess.run(["git", "-C", str(raiz), *args], check=True, capture_output=True,
+                   env={"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                        "GIT_COMMITTER_EMAIL": "t@t", "PATH": __import__("os").environ["PATH"], "HOME": str(raiz)})
+
+
+def test_desde_procesa_solo_lo_cambiado(tmp_path):
+    import json
+    import shutil
+
+    import pytest
+
+    if not shutil.which("git"):
+        pytest.skip("requiere git")
+    raiz = tmp_path / "banco"
+    raiz.mkdir()
+    # Mismo texto en ambos archivos (el título cuenta en la similitud).
+    pregunta = "::Punteros:: ¿Qué guarda un puntero en lenguaje C cuando se declara?\n{{=Una dirección ~Un entero ~Nada}}\n// {n}\n"
+    (raiz / "viejo.gift").write_text(pregunta.format(n=1), encoding="utf-8")
+    (raiz / "tocado.gift").write_text("::T:: ¿Sí? {T}\n", encoding="utf-8")
+    _git(raiz, "init", "-q")
+    _git(raiz, "add", ".")
+    _git(raiz, "commit", "-qm", "inicio")
+    (raiz / "tocado.gift").write_text("::T:: ¿Sí o no? {T}\n", encoding="utf-8")
+    (raiz / "nuevo.gift").write_text(pregunta.format(n=2), encoding="utf-8")
+
+    datos = json.loads(runner.invoke(cli, ["health", str(raiz), "--desde", "HEAD", "--json"]).output)
+    assert datos["archivos"]["total"] == 2
+    res = runner.invoke(cli, ["format", str(raiz), "--check", "--desde", "HEAD"])
+    assert "viejo.gift" not in res.output and "nuevo.gift" in res.output
+    # dedup compara contra todo el banco: el nuevo duplica al viejo, que no cambió.
+    grupos = json.loads(runner.invoke(cli, ["dedup", str(raiz), "-s", "0.9", "--desde", "HEAD", "--json"]).output)["grupos"]
+    assert len(grupos) == 1
+    archivos = {grupos[0]["conserva"]["archivo"]} | {d["archivo"] for d in grupos[0]["elimina"]}
+    assert {p.rsplit("/", 1)[-1] for p in archivos} == {"viejo.gift", "nuevo.gift"}
+    datos = json.loads(runner.invoke(cli, ["validate", str(raiz), "--desde", "HEAD", "--json"]).output)
+    assert sorted(f["filepath"].rsplit("/", 1)[-1] for f in datos["files"]) == ["nuevo.gift", "tocado.gift"]
+
+    fuera = tmp_path / "fuera"
+    fuera.mkdir()
+    (fuera / "a.gift").write_text("::A:: q {T}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["health", str(fuera), "--desde", "HEAD"])
+    assert res.exit_code == 1 and "git" in res.output

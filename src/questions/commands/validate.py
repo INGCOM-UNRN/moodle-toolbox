@@ -9,7 +9,7 @@ import typer
 from questions.core.validator import GiftAnalyzer
 from questions.core.banco import parse_archivo
 
-from questions.commands.common import LLM_OPTION
+from questions.commands.common import LLM_OPTION, fail
 
 
 def validate(
@@ -20,6 +20,8 @@ def validate(
     verbose: bool = typer.Option(False, "-v", "--verbose", help="Información detallada"),
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold para duplicados"),
     output_json: bool = typer.Option(False, "-j", "--json", help="Salida en JSON"),
+    desde: Optional[str] = typer.Option(
+        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
 ):
     """Valida archivos o directorios de preguntas GIFT y Moodle XML.
 
@@ -45,6 +47,16 @@ def validate(
             files_to_validate.append(path_obj)
         else:
             dirs_to_validate.append(path_obj)
+    if desde:
+        # Los directorios se expanden y quedan sólo los archivos cambiados.
+        from questions.core.banco import expandir_rutas, filtrar_desde
+
+        try:
+            files_to_validate = filtrar_desde(
+                files_to_validate + expandir_rutas(dirs_to_validate, recursive), desde, paths)
+        except ValueError as e:
+            fail(str(e))
+        dirs_to_validate = []
 
     # Procesar archivos individuales
     for f in files_to_validate:

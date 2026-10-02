@@ -10,7 +10,7 @@ import typer
 
 from questions.commands.common import LLM_OPTION, con_configuracion, emitir_json, fail
 from questions.core.ai import leer_archivos, unidades_de
-from questions.core.banco import expandir_rutas
+from questions.core.banco import archivos_cambiados, expandir_rutas
 from questions.core.deduplicar import CRITERIOS, a_json, agrupar, aplicar, plan, registrar
 
 
@@ -38,6 +38,8 @@ def dedup(
         False, "--confirmar-jev",
         help="Confirmar cada par con Jev (TypeSafe): sólo quedan los que evalúan exactamente lo mismo.",
     ),
+    desde: Optional[str] = typer.Option(
+        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     tui: bool = typer.Option(
         False, "--tui", help="Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar (extra 'tui').",
     ),
@@ -60,6 +62,14 @@ def dedup(
         archivos = leer_archivos(archivos_rutas)
     unidades = [u for u in unidades_de(archivos) if u.pregunta is not None]
     grupos = agrupar(unidades, similarity, conservar)
+    if desde:
+        # Se compara contra todo el banco, pero sólo interesan los grupos con algo nuevo.
+        try:
+            cambiados = archivos_cambiados(desde, paths)
+        except ValueError as e:
+            fail(str(e))
+        grupos = [g for g in grupos
+                  if any(u.archivo.resolve() in cambiados for u in [g.conservada] + [d for d, _ in g.duplicadas])]
     descartados = []
     if confirmar_jev and grupos:
         from questions.core.clasificacion import ClienteJev

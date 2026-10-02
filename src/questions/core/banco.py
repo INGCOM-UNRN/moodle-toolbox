@@ -7,7 +7,7 @@ extensión, para que validate, analyze y health traten ambos formatos por igual.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from questions.core.moodle_xml import parse_xml_file
 from questions.core.parser import parse_gift_file
@@ -61,3 +61,34 @@ def parse_archivo(ruta: str | Path) -> dict:
         formato = "gift"
     resultado["formato"] = formato
     return resultado
+
+
+def archivos_cambiados(desde: str, rutas: Iterable[str | Path] = ()) -> set:
+    """Archivos de preguntas cambiados desde la revisión git `desde` (incluye los nuevos
+    sin seguimiento), como rutas absolutas. Error si las rutas no están en un repo git."""
+    import subprocess
+
+    rutas = [Path(r) for r in rutas] or [Path.cwd()]
+    base = rutas[0].resolve()
+    base = base if base.is_dir() else base.parent
+
+    def git(*args) -> str:
+        r = subprocess.run(["git", "-C", str(base), *args], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise ValueError(f"git {' '.join(args)}: {r.stderr.strip() or 'falló'}")
+        return r.stdout
+
+    raiz = Path(git("rev-parse", "--show-toplevel").strip())
+    # diff --name-only da rutas relativas a la raíz; ls-files --full-name también.
+    nombres = git("diff", "--name-only", "--diff-filter=d", desde, "--").splitlines()
+    nombres += git("ls-files", "--others", "--exclude-standard", "--full-name", str(raiz)).splitlines()
+    return {(raiz / n).resolve() for n in nombres if Path(n).suffix.lower() in EXTENSIONES}
+
+
+def filtrar_desde(archivos: Iterable[Path], desde: Optional[str], rutas: Iterable = ()) -> list:
+    """Los archivos que cambiaron desde `desde` (todos si `desde` es None)."""
+    archivos = list(archivos)
+    if not desde:
+        return archivos
+    cambiados = archivos_cambiados(desde, rutas)
+    return [a for a in archivos if Path(a).resolve() in cambiados]
