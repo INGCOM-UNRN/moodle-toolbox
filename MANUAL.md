@@ -55,11 +55,11 @@ questions doctor
 | Comando | Descripción Breve |
 | :--- | :--- |
 | [`questions doctor`](#doctor) | Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis). |
-| [`questions health`](#health) | Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas. |
+| [`questions health`](#health) | Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces. |
 | [`questions ai`](#ai) | Procesamiento de preguntas usando IA (Gemini). |
-| [`questions validate`](#validate) | Valida archivos o directorios de preguntas GIFT. |
-| [`questions format`](#format) | Formatea archivos GIFT y ajusta bloques de código. |
-| [`questions split`](#split) | Divide archivos GIFT con múltiples preguntas en archivos individuales. |
+| [`questions validate`](#validate) | Valida archivos o directorios de preguntas GIFT y Moodle XML. |
+| [`questions format`](#format) | Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵). |
+| [`questions split`](#split) | Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales. |
 | [`questions unify`](#unify) | Unifica árboles o grupos de archivos de preguntas (GIFT o XML) en un único archivo. |
 | [`questions synth`](#synth) | daedalus en belmont: sintetiza preguntas de C verificadas con GCC. |
 | [`questions ui`](#ui) | Abre el editor web local (cerebro) sobre DIRECTORIO. |
@@ -83,23 +83,35 @@ questions doctor
 
 ### `questions health`
 
-Audita la salud, porcentajes de opciones, feedback y enlaces en el banco de preguntas.
+Audita la salud del banco sobre el modelo unificado de preguntas: **da el mismo diagnóstico para GIFT y Moodle XML** y acepta archivos sueltos, directorios o una mezcla de ambos formatos.
+
+- **Claves de corrección:** respuesta única con una opción de 100 % (las demás pueden dar crédito parcial), respuesta múltiple cuyos porcentajes positivos suman 100, respuesta corta y numérica con alguna opción de 100 %, y porcentajes que Moodle acepta al importar (`%33.33%` se rechaza: hace falta `%33.33333%`).
+- **Retroalimentación:** cobertura del feedback general y por opción; preguntas sin ningún feedback y preguntas con feedback en sólo algunas opciones.
+- **Cantidad de opciones:** distribución en opción múltiple, preguntas con menos de `--min-opciones` (emparejamiento: menos de 3 pares) y opciones repetidas.
+- **Longitud relativa de las respuestas:** preguntas donde la correcta es `--umbral-longitud` veces más larga (o más corta) que los distractores, y cuántas veces la correcta es la opción más larga frente a lo esperable por azar.
+- **Código:** secciones sin proteger para GIFT, marcas no canónicas (U+2007, NBSP, `;` griego) y líneas en blanco sin `↵`; backticks sin cerrar.
+- **Enlaces y HTML:** URLs `http://` o locales y etiquetas obsoletas (`<font>`, `<center>`, `style=`).
 
 #### Argumentos
 | Argumento | Tipo | Descripción |
 | :--- | :--- | :--- |
-| `archivo` | `<class 'pathlib.Path'>` | Argumento obligatorio de entrada. |
+| `rutas` | `List[pathlib.Path]` | Archivos `.gift`/`.xml` o directorios. |
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
+| `-r`, `--recursive` | `<class 'bool'>` | `False` | Buscar recursivamente en los directorios. |
 | `--md` | `Optional[pathlib.Path]` | `None` | Exportar reporte en Markdown. |
-| `--clean-html` | `<class 'bool'>` | `False` | Limpiar etiquetas HTML obsoletas y estilos inline. |
+| `--clean-html` | `<class 'bool'>` | `False` | Limpiar etiquetas HTML obsoletas y estilos inline (GIFT y XML). |
+| `--min-opciones` | `<class 'int'>` | `3` | Mínimo de opciones esperado en opción múltiple. |
+| `--umbral-longitud` | `<class 'float'>` | `1.5` | Razón de largo correcta/distractores a partir de la cual se advierte. |
+| `--max-items` | `<class 'int'>` | `50` | Máximo de preguntas listadas por sección (0: todas). |
 | `--json` | `<class 'bool'>` | `False` | Emite el diagnóstico como JSON versionado. |
 
 #### Ejemplo de Invocación
 ```bash
-questions health <archivo>
+questions health banco.xml
+questions health preguntas/ -r --md salud.md
 ```
 
 ### `questions ai`
@@ -127,7 +139,7 @@ questions ai
 
 ### `questions validate`
 
-Valida archivos o directorios de preguntas GIFT.
+Valida archivos o directorios de preguntas GIFT y Moodle XML: errores de parseo, estadísticas por formato y tipo, preguntas sin respuesta correcta y duplicados (también entre un `.gift` y un `.xml`). `questions analyze stats` y `questions analyze similar` recorren los mismos repositorios mixtos; la búsqueda de duplicados filtra por prefijos y escala a miles de preguntas.
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
@@ -142,12 +154,14 @@ Valida archivos o directorios de preguntas GIFT.
 
 #### Ejemplo de Invocación
 ```bash
-questions validate
+questions validate preguntas/ -r
 ```
 
 ### `questions format`
 
-Formatea archivos GIFT y ajusta bloques de código.
+Formatea archivos GIFT y Moodle XML y transforma el código. GIFT: `::Título::`, enunciado, `{` y `}` en líneas propias y una opción por línea con 4 espacios. XML: sangría de 2 espacios y cada `<text>` con contenido en CDATA (conserva los comentarios). El código de enunciados y opciones conserva sus saltos de línea y sangría.
+
+Las transformaciones de código son las mismas en ambos formatos (ver [caracteres especiales](docs/caracteres_especiales.md)): `--fullwidth` reemplaza los símbolos que chocan con GIFT (`{ } = ~ # : \ //`, y además `; < > [ ] ( ) * " &`) por sus formas fullwidth, marca la indentación con `·` (un punto por espacio) y cada fin de línea con `↵`; `--normal` lo deshace (en GIFT, escapando con `\` lo que GIFT interpretaría).
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
@@ -156,19 +170,21 @@ Formatea archivos GIFT y ajusta bloques de código.
 | `--llm` | `<class 'bool'>` | `False` | Muestra instrucciones para un LLM sobre este comando. |
 | `-r`, `--recursive` | `<class 'bool'>` | `False` | Procesar recursivamente |
 | `-n`, `--dry-run` | `<class 'bool'>` | `False` | No aplicar cambios |
-| `--code` | `<class 'bool'>` | `False` | Ajustar indentación en bloques de código (```) |
-| `--fullwidth` | `<class 'bool'>` | `False` | Convertir caracteres de código a fullwidth |
-| `--normal` | `<class 'bool'>` | `False` | Convertir caracteres de código a normal (default) |
-| `--correct-first` | `<class 'bool'>` | `False` | Mueve la respuesta correcta al principio (solo MC). |
+| `--code` | `<class 'bool'>` | `False` | Marcar la indentación del código con · (un punto por espacio) |
+| `--fullwidth` | `<class 'bool'>` | `False` | Proteger el código: símbolos fullwidth y marcas · (indentación) y ↵ (fin de línea) |
+| `--normal` | `<class 'bool'>` | `False` | Restaurar el código a caracteres normales (sin marcas) |
+| `--marcas/--sin-marcas` | `<class 'bool'>` | `True` | Con --fullwidth, agregar las marcas · y ↵. |
+| `--correct-first` | `<class 'bool'>` | `False` | Ordena las opciones de opción múltiple por porcentaje (la correcta primero). |
 
 #### Ejemplo de Invocación
 ```bash
-questions format
+questions format preguntas/ -r --fullwidth
+questions format banco.xml --correct-first
 ```
 
 ### `questions split`
 
-Divide archivos GIFT con múltiples preguntas en archivos individuales.
+Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales. En XML, cada archivo lleva la categoría vigente.
 
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
@@ -180,7 +196,7 @@ Divide archivos GIFT con múltiples preguntas en archivos individuales.
 
 #### Ejemplo de Invocación
 ```bash
-questions split
+questions split banco.xml
 ```
 
 ### `questions unify`

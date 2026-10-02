@@ -1,20 +1,24 @@
 VALIDATE_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Validación de Preguntas
+`validate`, `analyze` y `health` aceptan GIFT y Moodle XML (también repositorios mixtos).
 Al generar o corregir preguntas GIFT:
 1. **Evita líneas en blanco internas**: No insertes líneas vacías entre el título, el enunciado y el bloque de respuestas. En GIFT, una línea en blanco termina la pregunta.
 2. **Escapa los dos puntos**: No uses `:` en enunciados o respuestas a menos que lo escapes como `\:`. Para separadores visuales usa `：` (fullwidth).
 3. **Títulos obligatorios**: Usa siempre `::Título::` al inicio para facilitar la organización.
 4. **Resuelve duplicados**: Si el validador indica alta similitud, asegúrate de que la nueva pregunta aporte un valor distinto.
+5. **Salud del banco** (`health`): la respuesta correcta no debe ser notablemente más larga que los distractores; incluye feedback en cada opción; usa al menos 3 opciones; los porcentajes parciales deben ser los que Moodle acepta (`%33.33333%`, no `%33.33%`).
 """
 
 FORMAT_INSTRUCTIONS = r"""
-# Instrucciones para LLM: Formato GIFT
+# Instrucciones para LLM: Formato GIFT y Moodle XML
+`format` formatea GIFT y Moodle XML (sangría de 2 espacios y `<text>` en CDATA).
 Genera archivos GIFT siguiendo este estándar visual estricto:
 1. **Título**: Primera línea, formato `::Título::`.
 2. **Enunciado**: Siguiente línea inmediata, preferiblemente con prefijo `[markdown]`.
 3. **Bloque de respuestas**: Abrir `{` en su propia línea, cerrar `}` en su propia línea.
 4. **Indentación**: Usa exactamente 4 espacios para cada opción de respuesta (`=`, `~`, `#`).
 5. **Sin espacios extra**: Evita líneas en blanco innecesarias dentro de la estructura.
+6. **Código** (C/Java): `format --fullwidth` reemplaza `{ } = ~ # : \ //` (y `; < > [ ] ( ) * " &`) por formas fullwidth, marca la indentación con `·` (un punto por espacio) y cada fin de línea con `↵`. Una línea en blanco dentro del código debe quedar como `↵`.
 """
 
 XML_INSTRUCTIONS = r"""
@@ -40,12 +44,12 @@ AI_INSTRUCTIONS = r"""
 
 FIX_INSTRUCTIONS = r"""
 # Instrucciones para LLM: Correcciones y Renombrado
-1. **Indentación en Código**: En bloques de código (```), usa `····` (4 puntos medios) en lugar de espacios.
+1. **Indentación en Código**: En bloques de código (```), usa `·` por cada espacio de indentación (`····` = 4 espacios) y `↵` al final de cada línea salvo la última; vale igual para GIFT y XML.
 2. **Slugificación**: Usa `fix slugify` para normalizar nombres de archivos a minúsculas y sin acentos.
 3. **Sincronización de Nombres**:
    - `fix name-from-title`: Sincroniza el nombre del archivo con el título interno `::Título::`.
    - `fix title-from-name`: Actualiza el título interno `::Título::` basándose en el nombre del archivo.
-4. **Caracteres Especiales**: Convierte caracteres críticos a fullwidth dentro de bloques de código.
+4. **Caracteres Especiales**: Convierte caracteres críticos a fullwidth dentro de bloques de código (`fix code-chars --to-fullwidth`, en GIFT y XML). Referencia: docs/caracteres_especiales.md.
 """
 
 GENERAL_INSTRUCTIONS = r"""
@@ -74,6 +78,7 @@ def get_instructions(command_name):
     mapping = {
         'validate': VALIDATE_INSTRUCTIONS,
         'analyze': VALIDATE_INSTRUCTIONS,
+        'health': VALIDATE_INSTRUCTIONS,
         'format': FORMAT_INSTRUCTIONS,
         'xml': XML_INSTRUCTIONS,
         'convert': CONVERT_INSTRUCTIONS,

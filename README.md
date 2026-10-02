@@ -14,6 +14,7 @@ Todas las herramientas anteriores han sido consolidadas en un único comando ra�
 - Gestión integral, validación y mantenimiento de bancos de preguntas pedagógicas de Moodle.
 - Conversión bidireccional fiel y sin pérdida entre formatos GIFT y Moodle XML.
 - Normalización tipográfica de delimitadores de fórmulas matemáticas (LaTeX `\(...\)` y `\[...\]`) y bloques de código Markdown.
+- Paridad entre GIFT y Moodle XML: formato, protección del código (fullwidth, `·` y `↵`), análisis de repositorios, duplicados y reportes de salud trabajan igual sobre ambos formatos (y sobre repositorios mixtos).
 - Validación sintáctica y de completitud de metadatos de preguntas (retroalimentación, pesos porcentuales, categorías).
 - Reorganización y sincronización de estructuras de directorios de categorías de preguntas.
 
@@ -78,15 +79,16 @@ uv run questions --help
 
 El CLI `questions` se organiza en subcomandos especializados:
 
-### 1. Validación y Análisis
-- `questions validate`: Valida archivos o directorios GIFT, genera informes detallados y detecta duplicados.
-- `questions analyze stats`: Genera estadísticas completas sobre un banco de preguntas.
-- `questions analyze similar`: Encuentra preguntas similares usando análisis TF-IDF.
+### 1. Validación y Análisis (GIFT y XML)
+- `questions validate`: Valida archivos o directorios GIFT y Moodle XML, genera informes detallados y detecta duplicados.
+- `questions analyze stats`: Genera estadísticas completas sobre un repositorio de preguntas (por formato, tipo, categoría y tags).
+- `questions analyze similar`: Encuentra preguntas similares usando TF-IDF + Jaccard, también entre un `.gift` y un `.xml`; escala a miles de preguntas.
+- `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas (la correcta más larga que los distractores), código sin proteger, backticks sin cerrar, enlaces y HTML obsoleto.
 
-### 2. Formateo y Corrección
-- `questions format`: Estandariza el formato visual de archivos GIFT y ajusta bloques de código.
-- `questions fix code-indent`: Corrige la indentación dentro de bloques de código (```).
-- `questions fix code-chars`: Convierte caracteres especiales entre normal y fullwidth.
+### 2. Formateo y Corrección (GIFT y XML)
+- `questions format`: Estandariza el formato visual de archivos GIFT y Moodle XML (`--correct-first` ordena las opciones por porcentaje). `--fullwidth` protege el código: símbolos fullwidth, `·` en la indentación y `↵` al final de cada línea; `--normal` lo deshace. Ver [caracteres especiales](./docs/caracteres_especiales.md).
+- `questions fix code-indent`: Marca la indentación del código con `·`.
+- `questions fix code-chars`: Convierte los caracteres del código entre normal y fullwidth.
 - `questions fix slugify`: Normaliza nombres de archivos (minúsculas, sin acentos).
 - `questions fix name-from-title`: Renombra archivos según el título de la pregunta.
 - `questions fix title-from-name`: Actualiza el título interno según el nombre del archivo.
