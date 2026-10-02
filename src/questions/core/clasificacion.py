@@ -402,3 +402,117 @@ def run_clasificacion(file_paths: List[Path], output_dir: Optional[Path], in_pla
     print(f"   Tokens: {uso['input_tokens']} de entrada, {uso['output_tokens']} de salida"
           + (f"; {errores} preguntas con error" if errores else ""))
     return datos
+
+
+# ---------------------------------------------------------------------------
+# Calibración: comparar con una clasificación de referencia (docente)
+# ---------------------------------------------------------------------------
+
+COLUMNAS_REFERENCIA = ("archivo", "titulo", "bloom", "dificultad_enunciado", "dificultad_respuestas")
+
+
+def leer_referencias(ruta: Path) -> List[dict]:
+    """Filas de un CSV archivo,titulo,bloom[,dificultad_enunciado,dificultad_respuestas]."""
+    import csv
+
+    with Path(ruta).open(encoding="utf-8", newline="") as f:
+        filas = []
+        for fila in csv.DictReader(f):
+            bloom = (fila.get("bloom") or "").strip().lower()
+            bloom = re.sub(r"^b\d-", "", bloom)
+            if bloom not in BLOOM:
+                continue
+            filas.append({**fila, "bloom": bloom})
+        return filas
+
+
+def agregar_referencia(ruta: Path, archivo: Path, titulo: str, bloom: str,
+                       dificultad_enunciado=None, dificultad_respuestas=None) -> None:
+    """Agrega (o reemplaza) la clasificación de referencia de una pregunta en el CSV."""
+    import csv
+
+    ruta = Path(ruta)
+    filas = []
+    if ruta.exists():
+        with ruta.open(encoding="utf-8", newline="") as f:
+            filas = [r for r in csv.DictReader(f)
+                     if not (Path(r.get("archivo", "")).resolve() == Path(archivo).resolve() and r.get("titulo", "") == titulo)]
+    filas.append({"archivo": str(Path(archivo).resolve()), "titulo": titulo, "bloom": bloom,
+                  "dificultad_enunciado": "" if dificultad_enunciado is None else dificultad_enunciado,
+                  "dificultad_respuestas": "" if dificultad_respuestas is None else dificultad_respuestas})
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    with ruta.open("w", encoding="utf-8", newline="") as f:
+        escritor = csv.DictWriter(f, fieldnames=COLUMNAS_REFERENCIA)
+        escritor.writeheader()
+        escritor.writerows({c: r.get(c, "") for c in COLUMNAS_REFERENCIA} for r in filas)
+
+
+def _buscar(unidades: List[Unidad], referencia: dict) -> Optional[Unidad]:
+    ruta = Path(referencia.get("archivo", "")).resolve()
+    candidatas = [u for u in unidades if u.archivo.resolve() == ruta]
+    titulo = (referencia.get("titulo") or "").strip()
+    if titulo:
+        candidatas = [u for u in candidatas if (u.pregunta.title or "").strip() == titulo] or candidatas[:0]
+    return candidatas[0] if len(candidatas) == 1 else None
+
+
+def calibrar(referencias: List[dict], cliente: ClienteJev, contexto: str = CONTEXTO, concurrencia: int = 4) -> Dict:
+    """Clasifica con Jev las preguntas de referencia (sin escribir nada) y mide la concordancia."""
+    rutas = sorted({Path(r["archivo"]) for r in referencias if Path(r.get("archivo", "")).exists()})
+    unidades = [u for u in unidades_de(leer_archivos(rutas)) if u.pregunta is not None]
+    pares = [(r, u) for r in referencias for u in [_buscar(unidades, r)] if u is not None]
+
+    def clasificar(par):
+        r, u = par
+        return r, Clasificacion.desde_respuesta(cliente.consultar(estado(u.pregunta, contexto), preguntas_jev(u.pregunta)))
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
+        resultados = list(ejecutor.map(clasificar, pares))
+    return medir_concordancia(resultados, sin_encontrar=len(referencias) - len(pares))
+
+
+def medir_concordancia(resultados: List[tuple], sin_encontrar: int = 0) -> Dict:
+    """Exacta, ±1 nivel, kappa de Cohen, matriz de confusión y error medio de dificultad."""
+    niveles = list(BLOOM)
+    n = len(resultados)
+    matriz = {a: {b: 0 for b in niveles} for a in niveles}
+    exactas = adyacentes = 0
+    errores = {"enunciado": [], "respuestas": []}
+    for ref, c in resultados:
+        matriz[ref["bloom"]][c.bloom] += 1
+        distancia = abs(niveles.index(ref["bloom"]) - niveles.index(c.bloom))
+        exactas += distancia == 0
+        adyacentes += distancia <= 1
+        for campo, valor in (("enunciado", c.enunciado), ("respuestas", c.respuestas)):
+            esperado = (ref.get(f"dificultad_{campo}") or "").strip()
+            if esperado and valor is not None:
+                errores[campo].append(abs(float(esperado) - valor))
+    acuerdo = exactas / n if n else 0.0
+    azar = sum(sum(matriz[a].values()) * sum(matriz[b][a] for b in niveles) for a in niveles) / (n * n) if n else 0.0
+    return {
+        "preguntas": n,
+        "sin_encontrar": sin_encontrar,
+        "exacta": round(acuerdo, 3),
+        "adyacente": round(adyacentes / n, 3) if n else 0.0,
+        "kappa": round((acuerdo - azar) / (1 - azar), 3) if n and azar < 1 else None,
+        "matriz": matriz,
+        "error_dificultad_enunciado": round(mean(errores["enunciado"]), 2) if errores["enunciado"] else None,
+        "error_dificultad_respuestas": round(mean(errores["respuestas"]), 2) if errores["respuestas"] else None,
+    }
+
+
+def describir_calibracion(datos: Dict) -> str:
+    lineas = [f"Calibración de {MODELO} contra la referencia: {datos['preguntas']} preguntas"
+              + (f" ({datos['sin_encontrar']} filas sin pregunta que coincida)" if datos["sin_encontrar"] else ""),
+              f"  Bloom exacto: {datos['exacta']:.0%} · a ±1 nivel: {datos['adyacente']:.0%}"
+              + (f" · kappa de Cohen: {datos['kappa']:.2f}" if datos["kappa"] is not None else "")]
+    if datos["error_dificultad_enunciado"] is not None:
+        lineas.append(f"  Error medio de dificultad (1–5): enunciado {datos['error_dificultad_enunciado']:g}"
+                      + (f", respuestas {datos['error_dificultad_respuestas']:g}" if datos["error_dificultad_respuestas"] is not None else ""))
+    codigos = [CODIGO_BLOOM[n] for n in BLOOM]
+    lineas.append("  Matriz (filas: referencia, columnas: Jev): " + " ".join(f"{c:>3}" for c in codigos))
+    for nivel in BLOOM:
+        fila = datos["matriz"][nivel]
+        if any(fila.values()):
+            lineas.append(f"    {CODIGO_BLOOM[nivel]} {nivel:<10} " + " ".join(f"{fila[b] or '·':>3}" for b in BLOOM))
+    return "\n".join(lineas)

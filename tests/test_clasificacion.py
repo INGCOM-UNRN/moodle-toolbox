@@ -211,3 +211,27 @@ def test_cliente_jev_usa_la_cache(monkeypatch):
     assert len(llamadas) == 1
     cliente.consultar({"a": 2}, {"q": {}})
     assert len(llamadas) == 2
+
+
+def test_calibracion_contra_una_referencia(tmp_path):
+    banco = tmp_path / "b.gift"
+    banco.write_text(GIFT, encoding="utf-8")
+    referencia = tmp_path / "ref.csv"
+    cl.agregar_referencia(referencia, banco, "Igualdad", "aplicar", 3, 2)
+    cl.agregar_referencia(referencia, banco, "VF", "B1-recordar")
+    cl.agregar_referencia(referencia, banco, "VF", "comprender")  # reemplaza la anterior
+    filas = cl.leer_referencias(referencia)
+    assert [(f["titulo"], f["bloom"]) for f in filas] == [("Igualdad", "aplicar"), ("VF", "comprender")]
+
+    datos = cl.calibrar(filas, Cliente())  # Jev simulado: siempre "aplicar", enunciado 3.4, respuestas 2.5
+    assert datos["preguntas"] == 2 and datos["exacta"] == 0.5 and datos["adyacente"] == 1.0
+    assert datos["matriz"]["comprender"]["aplicar"] == 1
+    assert datos["error_dificultad_enunciado"] == 0.4 and datos["error_dificultad_respuestas"] == 0.5
+    texto = cl.describir_calibracion(datos)
+    assert "Bloom exacto: 50%" in texto and "a ±1 nivel: 100%" in texto
+
+
+def test_kappa():
+    c = cl.Clasificacion
+    perfecto = [({"bloom": b}, c(b, 1, 1, 1)) for b in ("recordar", "aplicar", "analizar")]
+    assert cl.medir_concordancia(perfecto)["kappa"] == 1.0

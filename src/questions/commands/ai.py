@@ -31,6 +31,9 @@ def ai(
     concurrencia: int = typer.Option(4, "--concurrencia", help="classify: solicitudes simultáneas a Jev."),
     reclasificar: bool = typer.Option(False, "--reclasificar", help="classify: volver a clasificar las ya clasificadas."),
     tags: bool = typer.Option(False, "--tags", help="classify: escribir también tags de Moodle (bloom:…, dificultad-…)."),
+    calibrar: Optional[Path] = typer.Option(
+        None, "--calibrar", exists=True,
+        help="classify: comparar con una referencia CSV (archivo,titulo,bloom[,dificultad_enunciado,…]) sin escribir nada."),
     opciones: int = typer.Option(4, "--opciones", help="distractors: cantidad de opciones a alcanzar por pregunta."),
     precio_entrada: Optional[float] = typer.Option(
         None, "--precio-entrada", help="USD por millón de tokens de entrada, para estimar el costo."),
@@ -75,6 +78,21 @@ def ai(
     file_paths = expandir_rutas(inputs, recursive)
     if not file_paths:
         fail("No se encontraron archivos .gift o .xml para procesar.")
+
+    if mode == "classify" and calibrar is not None:
+        from questions.core.cache import Cache
+        from questions.core.clasificacion import CONTEXTO, ClienteJev, describir_calibracion, leer_referencias
+        from questions.core.clasificacion import calibrar as calibrar_jev
+
+        try:
+            cliente = ClienteJev(cache=Cache("jev", activa=not sin_cache))
+        except ValueError as e:
+            fail(str(e))
+        referencias = leer_referencias(calibrar)
+        if not referencias:
+            fail(f"{calibrar} no tiene filas con un nivel de Bloom válido.")
+        click.echo(describir_calibracion(calibrar_jev(referencias, cliente, contexto or CONTEXTO, concurrencia)))
+        return
 
     if mode == "classify":
         from questions.core.clasificacion import CONTEXTO, ClienteJev, run_clasificacion
