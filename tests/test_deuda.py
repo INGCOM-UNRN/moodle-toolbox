@@ -159,3 +159,15 @@ def test_html_a_markdown_cambia_solo_los_campos_convertidos():
     assert q.find("generalfeedback").get("format") == "html"
     assert [a.get("format") for a in q.findall("answer")] == ["markdown", "html"]
     assert q.find("answer").findtext("text") == "**Incrementa**"
+
+
+def test_similitud_detecta_identicas_en_un_conjunto_chico():
+    """Con el IDF sin suavizar, dos preguntas idénticas entre tres daban coseno 0."""
+    from questions.core.validator import GiftAnalyzer
+
+    analizador = GiftAnalyzer(similarity_threshold=0.9)
+    texto = "Punteros qué guarda un puntero en lenguaje C una dirección un entero nada"
+    analizador.all_questions = [{"full_text": texto}, {"full_text": texto}, {"full_text": "otra cosa distinta sí"}]
+    analizador.find_duplicates()
+    assert [(d["index1"], d["index2"]) for d in analizador.duplicates] == [(0, 1)]
+    assert analizador.duplicates[0]["similarity"] > 0.99

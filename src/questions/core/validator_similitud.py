@@ -42,9 +42,12 @@ class SimilitudMixin:
             for word in words:
                 doc_count[word] += 1
         
+        # IDF suavizado (siempre positivo): con log(N / (1 + df)) una palabra que comparten
+        # todos o casi todos los documentos pesa 0 o negativo, y en un conjunto chico dos
+        # preguntas idénticas quedaban con coseno 0.
         idf = {}
         for word, count in doc_count.items():
-            idf[word] = math.log(num_docs / (1 + count))
+            idf[word] = math.log((1 + num_docs) / (1 + count)) + 1
         
         return idf
     
