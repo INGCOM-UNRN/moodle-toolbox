@@ -19,7 +19,7 @@ La referencia de caracteres está en ``docs/caracteres_especiales.md``.
 from __future__ import annotations
 
 import re
-from typing import Callable
+from typing import Callable, Optional
 
 MARCA_ESPACIO = "·"
 MARCA_SALTO = "↵"
@@ -341,6 +341,50 @@ def transformar_archivo(
         )
     contexto = "gift" if formato == "gift" else "xml"
     return transformar_codigo(contenido, contexto=contexto, fullwidth=fullwidth, espacios=espacios, saltos=saltos)
+
+
+# ---------------------------------------------------------------------------
+# Lenguaje de los bloques ```
+# ---------------------------------------------------------------------------
+
+_SEÑALES_LENGUAJE = (
+    ("java", re.compile(r"System\.out|public\s+(?:static\s+)?(?:class|void)|String\[\]|\bimport\s+java\.|"
+                        r"\bnew\s+[A-Z]\w*\s*\(|@Override|\bextends\b|\bimplements\b")),
+    ("c", re.compile(r"#include|#define|\bprintf\s*\(|\bscanf\s*\(|\bmalloc\s*\(|\bfree\s*\(|\bsizeof\b|"
+                     r"\bint\s+main\s*\(|->|\bstruct\s+\w+|\btypedef\b|\bNULL\b|\bchar\s*\*")),
+    ("python", re.compile(r"^\s*def\s+\w+\(.*\):\s*$|^\s*import\s+\w+\s*$|\bprint\(|^\s*elif\b|:\s*$", re.M)),
+)
+_FENCE_SIN_LENGUAJE = re.compile(r"```[ \t]*\n(.*?)```", re.S)
+
+
+def detectar_lenguaje(codigo: str) -> Optional[str]:
+    """c, java o python según el contenido (restaurado a ASCII); None si no se puede decidir."""
+    plano = transformar_fragmento(codigo, contexto="xml", fullwidth=False)
+    for lenguaje, patron in _SEÑALES_LENGUAJE:
+        if patron.search(plano):
+            return lenguaje
+    return None
+
+
+def etiquetar_lenguaje(texto: str, por_defecto: Optional[str] = None) -> tuple:
+    """Agrega la etiqueta de lenguaje a los bloques ``` que no la tienen. (texto, cambios)."""
+    cambios = 0
+
+    def etiquetar(m: re.Match) -> str:
+        nonlocal cambios
+        lenguaje = detectar_lenguaje(m.group(1)) or por_defecto
+        if not lenguaje:
+            return m.group(0)
+        cambios += 1
+        return f"```{lenguaje}\n{m.group(1)}```"
+
+    return _FENCE_SIN_LENGUAJE.sub(etiquetar, texto), cambios
+
+
+def etiquetar_lenguaje_archivo(contenido: str, formato: str, por_defecto: Optional[str] = None) -> tuple:
+    if formato == "xml":
+        return transformar_textos_xml(contenido, lambda t: etiquetar_lenguaje(t, por_defecto))
+    return etiquetar_lenguaje(contenido, por_defecto)
 
 
 # ---------------------------------------------------------------------------

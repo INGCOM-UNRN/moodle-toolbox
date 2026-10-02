@@ -3,7 +3,7 @@ import typer
 from pathlib import Path
 from typing import List, Optional
 from questions.core.banco import expandir_rutas, formato_de
-from questions.core.codigo import transformar_archivo
+from questions.core.codigo import etiquetar_lenguaje_archivo, transformar_archivo
 from questions.core.naming import rename_to_slug, rename_from_title, set_question_title
 
 from questions.commands.common import LLM_OPTION
@@ -146,3 +146,26 @@ def code_chars(
             modified_count += 1
     
     click.echo(f"\nFinalizado: {modified_count} archivos modificados.")
+
+@fix_app.command(name="code-lang")
+def code_lang(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    lenguaje: Optional[str] = typer.Option(
+        None, "--lenguaje", help="Lenguaje para los bloques en los que no se puede detectar (c, java, python…)."),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
+):
+    """Agrega la etiqueta de lenguaje (c, java, python) a los bloques ``` que no la tienen (GIFT, XML y Markdown)."""
+    files = expandir_rutas(paths or ['.'], recursive, ('.gift', '.xml', '.md'))
+
+    modified_count = 0
+    for f in sorted(files):
+        content = f.read_text(encoding='utf-8')
+        new_content, count = etiquetar_lenguaje_archivo(content, formato_de(f) or "md", lenguaje)
+        if count > 0:
+            if not dry_run:
+                f.write_text(new_content, encoding='utf-8')
+            click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}{f}: {count} bloques etiquetados")
+            modified_count += 1
+
+    click.echo(f"\nFinalizado: {modified_count} archivos {'a modificar' if dry_run else 'modificados'}.")

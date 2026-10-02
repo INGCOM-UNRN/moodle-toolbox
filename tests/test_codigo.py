@@ -169,3 +169,18 @@ def test_el_fuente_no_depende_de_caracteres_que_nfc_altera():
     fuente = Path(codigo.__file__).read_text(encoding="utf-8")
     assert unicodedata.normalize("NFC", fuente) == fuente
     assert not any(c in fuente for c in "\u2007\u2000\u00a0\u3000")
+
+
+def test_detectar_y_etiquetar_lenguaje():
+    from questions.core.codigo import detectar_lenguaje, etiquetar_lenguaje, etiquetar_lenguaje_archivo
+
+    assert detectar_lenguaje("＃include ＜stdio.h＞") == "c"
+    assert detectar_lenguaje('System.out.println（＂a＂）；') == "java"
+    assert detectar_lenguaje("def f(x):\n    return x") == "python"
+    assert detectar_lenguaje("x = 1") is None
+    texto = "a\n```\nint *p = NULL;\n```\nb\n```\nx = 1\n```\n```c\nint y;\n```"
+    nuevo, cambios = etiquetar_lenguaje(texto)
+    assert cambios == 1 and nuevo.startswith("a\n```c\nint *p = NULL;\n```") and "```\nx = 1\n```" in nuevo
+    assert etiquetar_lenguaje(texto, por_defecto="c")[1] == 2
+    xml = "<quiz><question><questiontext><text><![CDATA[```\nprintf(\"x\");\n```]]></text></questiontext></question></quiz>"
+    assert "```c\nprintf" in etiquetar_lenguaje_archivo(xml, "xml")[0]
