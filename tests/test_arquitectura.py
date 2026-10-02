@@ -65,3 +65,18 @@ def test_unify_protege_las_barras_del_codigo_respetando_los_escapes():
     assert proteger("`a \\{ b \\}`") == "`a \\{ b \\}`"                              # escapes de GIFT
     assert proteger("```c\nputs(\"\\\\\\\\\");\n```") == "```c\nputs(\"＼＼\");\n```"   # \\\\ son dos
     assert proteger("fuera \\\\ del código") == "fuera \\\\ del código"
+
+
+def test_health_lee_cada_archivo_una_vez_con_los_mismos_resultados(tmp_path):
+    from questions.core.moodle_health import auditar_archivos
+
+    crlf = tmp_path / "crlf.gift"
+    crlf.write_bytes("::A:: ¿Sí?\r\n{T}\r\n\r\n::B:: ¿No? {F}\r\n".encode("utf-8"))
+    latin = tmp_path / "latin.gift"
+    latin.write_bytes("::C:: ¿Qué <font>es</font>? {T}\n".encode("latin-1"))
+    resultado = auditar_archivos([crlf, latin])
+    assert resultado["estructura"]["total_preguntas"] == 2  # las de crlf.gift
+    errores = resultado["archivos"]["errores"]
+    assert [e["archivo"] for e in errores] == [str(latin)] and "Error leyendo archivo" in errores[0]["error"]
+    # El archivo ilegible igual se audita como texto (HTML obsoleto).
+    assert [h["archivo"] for h in resultado["html_obsoleto"]] == [str(latin)]

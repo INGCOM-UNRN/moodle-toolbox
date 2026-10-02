@@ -26,7 +26,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
-from questions.core.banco import formato_de, parse_archivo
+from questions.core.banco import formato_de
 from questions.core.codigo import diagnosticar_codigo, transformar_textos_xml
 from questions.core.metadatos import NIVELES_BLOOM, codigo_bloom
 from questions.core.moodle_xml import parse_xml
@@ -471,9 +471,31 @@ def _categoria_legible(ruta: str) -> str:
     return ruta or "(raíz)"
 
 
-def _carpeta(ruta: Path, base: Path) -> str:
+def _leer_y_parsear(ruta: Path, formato: str) -> tuple:
+    """Lee el archivo una sola vez: el texto (con reemplazos si no es UTF-8 válido, para
+    auditarlo igual) y el resultado del parser, que como parse_archivo rechaza lo que no
+    es UTF-8. Los finales de línea se normalizan como en read_text."""
     try:
-        relativa = Path(ruta).resolve().parent.relative_to(base)
+        datos = ruta.read_bytes()
+    except OSError as e:
+        return "", {"success": False, "error": {"message": f"Error leyendo archivo: {e}"}}
+    try:
+        texto = datos.decode("utf-8")
+        estricto = True
+    except UnicodeDecodeError as e:
+        texto, estricto, error = datos.decode("utf-8", errors="replace"), False, e
+    texto = texto.replace("\r\n", "\n").replace("\r", "\n")
+    if not estricto:
+        return texto, {"success": False, "error": {"message": f"Error leyendo archivo: {error}"}}
+    try:
+        return texto, parse_xml(texto) if formato == "xml" else parse_gift(texto)
+    except Exception as e:  # noqa: BLE001 - como parse_archivo: se informa como archivo ilegible
+        return texto, {"success": False, "error": {"message": f"Error leyendo archivo: {e}"}}
+
+
+def _carpeta(ruta: Path, base: Path, padre: Optional[Path] = None) -> str:
+    try:
+        relativa = (padre or Path(ruta).resolve().parent).relative_to(base)
     except ValueError:
         relativa = Path(ruta).parent
     return str(relativa).replace(os.sep, "/") if str(relativa) != "." else "(raíz)"
@@ -552,7 +574,9 @@ def auditar_archivos(
     archivos_codigo: List[dict] = []
     html_obsoleto: List[dict] = []
     archivos = list(archivos)
-    base = Path(os.path.commonpath([str(Path(a).resolve().parent) for a in archivos])) if archivos else Path(".")
+    # Cada carpeta se resuelve una sola vez (resolve es lo más caro de recorrer el banco).
+    padres = {a: Path(a).resolve().parent for a in archivos}
+    base = Path(os.path.commonpath([str(p) for p in padres.values()])) if archivos else Path(".")
 
     for ruta in archivos:
         if avance is not None:
@@ -563,20 +587,21 @@ def auditar_archivos(
             contenido = contenidos[ruta]
             resultado = parse_xml(contenido) if formato == "xml" else parse_gift(contenido)
         else:
-            contenido = ruta.read_text(encoding="utf-8", errors="replace")
-            resultado = parse_archivo(ruta)
+            contenido, resultado = _leer_y_parsear(ruta, formato)
         if not resultado.get("success"):
             errores.append({"archivo": str(ruta), "error": resultado["error"]["message"]})
         else:
             # Categoría: la última $CATEGORY / <question type="category"> del archivo o, en un
             # árbol de una pregunta por archivo, la carpeta relativa a la raíz del banco.
-            categoria = None
+            categoria, carpeta = None, None
             for p in resultado["questions"]:
                 if p.get("type") == "Category":
                     categoria = _categoria_legible(p.get("title") or "")
                     continue
+                if categoria is None and carpeta is None:
+                    carpeta = _carpeta(ruta, base, padres.get(ruta))
                 preguntas.append({**p, "filepath": str(ruta), "formato": formato,
-                                  "categoria": categoria or _carpeta(ruta, base)})
+                                  "categoria": categoria or carpeta})
 
         texto = auditar_texto(contenido, formato)
         enlaces["total_urls"] += texto["enlaces"]["total_urls"]
