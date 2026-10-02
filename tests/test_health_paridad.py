@@ -194,3 +194,12 @@ def test_reporte_de_banco_vacio_no_inventa_porcentajes(tmp_path):
     vacio.write_text("<quiz></quiz>", encoding="utf-8")
     reporte = generar_reporte_markdown(auditar_archivos([vacio]), "v.xml")
     assert "**Cobertura de Feedback:** — (0 sin explicación)" in reporte
+
+
+def test_cli_health_json_y_md_juntos(tmp_path):
+    banco = tmp_path / "a.gift"
+    banco.write_text("::P:: ¿Cuál? {=a #bien ~b #no ~c #no ####g}\n", encoding="utf-8")
+    salida = tmp_path / "salud.md"
+    res = runner.invoke(cli, ["health", str(banco), "--json", "--md", str(salida)])
+    assert res.exit_code == 0 and json.loads(res.output)["ok"] is True
+    assert salida.read_text(encoding="utf-8").startswith("# 🏥 Informe de Salud")

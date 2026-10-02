@@ -86,6 +86,11 @@ def health_cmd(
             click.echo(f"✓ {filas} preguntas exportadas a {output_csv}")
 
     if output_json:
+        if output_md:
+            # Con --json y --md juntos se escriben ambos (p. ej. la acción de GitHub).
+            nombre_md = rutas[0].name if len(rutas) == 1 else f"{len(archivos)} archivos"
+            output_md.parent.mkdir(parents=True, exist_ok=True)
+            output_md.write_text(generar_reporte_markdown(resultado, nombre_md, max_items=max_items), encoding="utf-8")
         datos = {}
         if len(rutas) == 1 and rutas[0].is_file():
             datos["archivo"] = str(rutas[0])
