@@ -1,0 +1,39 @@
+# Hooks de pre-commit para los repositorios de bancos de preguntas.
+# Uso, en el .pre-commit-config.yaml del banco:
+#
+#   repos:
+#     - repo: https://github.com/INGCOM-UNRN/moodle-toolbox
+#       rev: <tag o commit>
+#       hooks:
+#         - id: questions-format
+#         - id: questions-health
+#
+# Todos reciben sólo los archivos .gift/.xml del commit.
+
+- id: questions-format
+  name: formato estándar de GIFT y Moodle XML
+  description: Falla si algún archivo no tiene el formato estándar (questions format lo corrige).
+  entry: questions format --check
+  language: python
+  files: \.(gift|xml)$
+
+- id: questions-health
+  name: salud del banco (errores)
+  description: Falla ante errores que Moodle no importaría o importaría mal (porcentajes, preguntas partidas, código que rompe GIFT).
+  entry: questions health --max-items 20
+  language: python
+  files: \.(gift|xml)$
+
+- id: questions-health-estricto
+  name: salud del banco (errores y advertencias)
+  description: Como questions-health, pero también falla ante advertencias (feedback, opciones, longitud de las respuestas).
+  entry: questions health --estricto --max-items 20
+  language: python
+  files: \.(gift|xml)$
+
+- id: questions-validate
+  name: validación de GIFT y Moodle XML
+  description: Falla si algún archivo no se puede interpretar o tiene preguntas sin respuesta correcta o vacías.
+  entry: questions validate
+  language: python
+  files: \.(gift|xml)$
