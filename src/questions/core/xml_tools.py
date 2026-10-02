@@ -26,7 +26,8 @@ def ensure_cdata_in_text_blocks(xml_content: str) -> tuple[str, int]:
         return match.group(0)
 
     # Regex para capturar <text>...</text> considerando atributos
-    pattern = r'(<text[^>]*>)(.*?)(</text>)'
+    # `(?<!/)>` excluye `<text/>`: sin eso el contenido se extendería hasta el próximo </text>.
+    pattern = r'(<text\b[^>]*(?<!/)>)(.*?)(</text>)'
     new_content = re.sub(pattern, replace_text, xml_content, flags=re.DOTALL)
     return new_content, count
 
