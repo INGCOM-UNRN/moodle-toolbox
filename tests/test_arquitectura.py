@@ -17,6 +17,32 @@ def _preguntas(texto: str) -> list:
     return [q for q in parse_gift(texto)["questions"] if q["type"] != "Category"]
 
 
+def test_tree_export_no_parte_preguntas_con_lineas_en_blanco(tmp_path):
+    from questions.core.tree import gift_export
+
+    banco = tmp_path / "banco.gift"
+    banco.write_text(CON_BLANCO, encoding="utf-8")
+    assert gift_export(banco, tmp_path / "arbol") == 2
+    archivos = sorted((tmp_path / "arbol").rglob("*.gift"))
+    assert len(archivos) == 2
+    titulos = sorted(q["title"] for a in archivos for q in _preguntas(a.read_text(encoding="utf-8")))
+    assert titulos == ["Cuerpo", "Otra"]
+    cuerpo = (tmp_path / "arbol" / "Funciones" / "cuerpo.gift").read_text(encoding="utf-8")
+    assert "return 1;" in cuerpo and "~nada" in cuerpo and cuerpo.rstrip().endswith("}")
+
+
+def test_unify_no_parte_preguntas_con_lineas_en_blanco(tmp_path):
+    from questions.core.unifier import unificar
+
+    (tmp_path / "arbol" / "Funciones").mkdir(parents=True)
+    (tmp_path / "arbol" / "Funciones" / "a.gift").write_text(CON_BLANCO.split("\n\n", 1)[1], encoding="utf-8")
+    destino = tmp_path / "todo.gift"
+    unificar([tmp_path / "arbol"], destino, formato="gift", recursivo=True)
+    preguntas = _preguntas(destino.read_text(encoding="utf-8"))
+    assert [q["title"] for q in preguntas] == ["Cuerpo", "Otra"]
+    assert "return 1;" in preguntas[0]["choices"][0]["text"]["text"]
+
+
 def test_una_pregunta_sin_cerrar_no_se_traga_el_resto():
     from questions.core.formatter import _bloques_gift
 

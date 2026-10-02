@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, Union
 
 from questions.core.converter import _cdata_sub
+from questions.core.formatter import _bloques_gift
 from questions.core.tree import (
     _protect_backslashes_in_code,
     serializar_quiz,
@@ -55,7 +56,7 @@ def unificar_gift(
 
     for cat_rel, filepath in archivos_gift:
         content = filepath.read_text(encoding="utf-8")
-        bloques = [b.strip() for b in re.split(r"\n\s*\n", content) if b.strip()]
+        bloques = [b.strip() for b in _bloques_gift(content) if b.strip()]
 
         for bloque in bloques:
             cat_match = re.search(r"^\$CATEGORY:\s*(.*)", bloque, flags=re.MULTILINE)

@@ -39,81 +39,42 @@ def _protect_backslashes_in_code(text: str) -> str:
     return text
 
 
-def _format_gift_block(block: str) -> str:
-    """Formatea un bloque GIFT con saltos de línea legibles."""
-    try:
-        title_start = block.index('::')
-        title_end = block.index('::', title_start + 2)
-        title_part = block[title_start:title_end + 2]
-        content_after_title = block[title_end + 2:]
-
-        if _is_cloze_question(content_after_title):
-            return f"{title_part.strip()}\n{content_after_title.strip()}\n"
-
-        brace_start = block.index('{')
-        brace_end = block.rindex('}')
-
-        if not (title_end < brace_start < brace_end):
-            return block + '\n'
-
-        stem_part = block[title_end + 2:brace_start]
-        answer_part = block[brace_start + 1:brace_end]
-
-        return (
-            f"{title_part.strip()}\n"
-            f"{stem_part.strip()}\n"
-            f"{{\n"
-            f"{answer_part.strip()}\n"
-            f"}}\n"
-        )
-    except (ValueError, IndexError):
-        return block + '\n'
-
-
-def _is_cloze_question(content: str) -> bool:
-    try:
-        first_open = content.index('{')
-        first_close = content.index('}', first_open)
-        before_brace = content[:first_open].strip()
-        after_close = content[first_close + 1:].strip()
-        if before_brace and after_close:
-            return True
-        if content.count('{') > 1:
-            return True
-    except (ValueError, IndexError):
-        pass
-    return False
-
-
 def gift_export(input_file: Path, base_output_dir: Path) -> int:
     """Exporta un banco GIFT monolítico a un árbol de directorios."""
     print(f"Exportando GIFT desde: {input_file}")
     contenido = input_file.read_text(encoding='utf-8')
 
-    # División por bloques separados por líneas en blanco (convención de
-    # `questions split`); cada bloque puede contener $CATEGORY y/o una pregunta.
-    bloques = [b.strip() for b in re.split(r'\n\s*\n', contenido) if b.strip()]
+    # División por bloques como el parser: una línea en blanco sólo corta con las llaves
+    # balanceadas (el código con líneas en blanco queda en su pregunta). Cada bloque
+    # puede contener $CATEGORY y/o una pregunta.
+    from questions.core.formatter import _bloques_gift
+
+    bloques = [b.strip() for b in _bloques_gift(contenido) if b.strip()]
 
     current_category = ''
     question_count = 0
     used_filenames: dict[str, int] = {}
 
+    from questions.core.formatter import format_gift_content
+    from questions.core.parser import parse_gift
+
     for bloque in bloques:
-        cat_match = re.search(r'^\$CATEGORY:\s*(.*)', bloque, flags=re.MULTILINE)
-        if cat_match:
-            categoria = cat_match.group(1).strip()
+        lineas = bloque.split('\n')
+        declaradas = [linea for linea in lineas if linea.strip().startswith('$CATEGORY:')]
+        if declaradas:
+            categoria = declaradas[-1].strip()[len('$CATEGORY:'):].strip()
             partes = [sanitize_dirname(p) for p in categoria.split('/')
                       if p.strip() and p != '$course$']
             current_category = '/'.join(partes)
-            if not re.search(r'::.*?::', bloque, re.DOTALL):
-                continue  # bloque sólo-declarativa de categoría
+        # La pregunta, con sus comentarios (tags, id, clasificación), sin la $CATEGORY.
+        cuerpo = '\n'.join(linea for linea in lineas if not linea.strip().startswith('$CATEGORY:')).strip()
+        preguntas = [q for q in parse_gift(cuerpo)['questions'] if q['type'] != 'Category'] if cuerpo else []
+        if not preguntas:
+            continue  # sólo comentarios o la declaración de una categoría
 
-        title_match = re.search(r'::(.*?)::', bloque, re.DOTALL)
-        if not title_match:
-            continue
-
-        formatted = _format_gift_block(bloque)
-        titulo_completo = title_match.group(1).strip()
+        formatted = format_gift_content(cuerpo).rstrip('\n') + '\n'
+        # El título lo da el parser: un comentario como `// CAT: Algo::` no lo confunde.
+        titulo_completo = (preguntas[0].get('title') or '').strip() or 'sin título'
 
         categoria_del_titulo = ''
         titulo_real = titulo_completo
