@@ -29,7 +29,7 @@ def export_cmd(
         ..., "-o", "--output-dir",
         help="Directorio de destino del árbol de preguntas."),
     formato: Optional[str] = typer.Option(
-        None, "--formato",
+        None, "--formato", "--format",
         click_type=click.Choice(["gift", "xml"]),
         help="Forzar el formato (por defecto se deduce de la extensión)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
@@ -52,7 +52,7 @@ def collect_cmd(
         ..., "-o", "--output",
         help="Archivo monolítico de destino (.gift o .xml; define el formato)."),
     formato: Optional[str] = typer.Option(
-        None, "--formato",
+        None, "--formato", "--format",
         click_type=click.Choice(["gift", "xml"]),
         help="Forzar el formato (por defecto se deduce de la extensión de salida)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),

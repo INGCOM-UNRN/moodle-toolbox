@@ -20,11 +20,11 @@ def moodle(llm: bool = LLM_OPTION):
 def subir(
     rutas: List[Path] = typer.Argument(..., exists=True, help="Archivos .gift/.xml o directorios (las carpetas son categorías)."),
     url: str = typer.Option(..., "--url", envvar="MOODLE_URL", help="URL del sitio Moodle (o MOODLE_URL)."),
-    curso: int = typer.Option(..., "--curso", help="id del curso destino (conviene uno de prueba para probar la importación)."),
+    curso: int = typer.Option(..., "--curso", "--course", help="id del curso destino (conviene uno de prueba para probar la importación)."),
     token: str = typer.Option(None, "--token", help="Token del servicio web (o MOODLE_TOKEN, también en ~/.questions/.env)."),
     recursive: bool = typer.Option(True, "-r/--no-recursive", help="Recorrer los subdirectorios."),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="Preparar el XML y mostrar qué se subiría, sin contactar a Moodle."),
-    guardar: Path = typer.Option(None, "--guardar", help="Guardar también el Moodle XML que se sube."),
+    guardar: Path = typer.Option(None, "--guardar", "--save", help="Guardar también el Moodle XML que se sube."),
     output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
 ):
     """Sube preguntas a un curso de Moodle (requiere el plugin local_questions_importer_ws).

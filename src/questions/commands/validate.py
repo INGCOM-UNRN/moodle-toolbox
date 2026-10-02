@@ -21,7 +21,7 @@ def validate(
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold para duplicados"),
     output_json: bool = typer.Option(False, "-j", "--json", help="Salida en JSON"),
     desde: Optional[str] = typer.Option(
-        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+        None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
 ):
     """Valida archivos o directorios de preguntas GIFT y Moodle XML.
 

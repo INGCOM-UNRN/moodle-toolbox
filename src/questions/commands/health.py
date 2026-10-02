@@ -30,19 +30,19 @@ def health_cmd(
         False, "--clean-html", help="Limpiar etiquetas HTML obsoletas y estilos inline (GIFT y XML)."
     ),
     min_opciones: int = typer.Option(
-        MIN_OPCIONES, "--min-opciones", help="Mínimo de opciones esperado en opción múltiple."
+        MIN_OPCIONES, "--min-opciones", "--min-options", help="Mínimo de opciones esperado en opción múltiple."
     ),
     umbral_longitud: float = typer.Option(
-        UMBRAL_LONGITUD, "--umbral-longitud",
+        UMBRAL_LONGITUD, "--umbral-longitud", "--length-threshold",
         help="Razón de largo correcta/distractores a partir de la cual se advierte.",
     ),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="Con --clean-html: mostrar qué se limpiaría sin escribir."),
     max_items: int = typer.Option(50, "--max-items", help="Máximo de preguntas listadas por sección (0: todas)."),
-    estricto: bool = typer.Option(False, "--estricto", help="Salir con código 1 también ante advertencias."),
+    estricto: bool = typer.Option(False, "--estricto", "--strict", help="Salir con código 1 también ante advertencias."),
     output_csv: Optional[Path] = typer.Option(
         None, "--csv", help="Exportar una fila por pregunta con todas las señales (para planillas)."),
     desde: Optional[str] = typer.Option(
-        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+        None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
     """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces.

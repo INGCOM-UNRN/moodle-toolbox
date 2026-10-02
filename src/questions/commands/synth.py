@@ -9,14 +9,14 @@ from questions.commands.common import LLM_OPTION, emitir_json, fail
 def synth(
     plantilla: str = typer.Argument(""),
     llm: bool = LLM_OPTION,
-    cantidad: int = typer.Option(5, "-n", "--cantidad", show_default=True,
+    cantidad: int = typer.Option(5, "-n", "--cantidad", "--count", show_default=True,
                                   help="Cantidad de preguntas a sintetizar."),
-    semilla: int = typer.Option(42, "-s", "--semilla", show_default=True,
+    semilla: int = typer.Option(42, "-s", "--semilla", "--seed", show_default=True,
                                  help="Semilla pseudo-aleatoria (salida reproducible)."),
     archivo_salida: Optional[Path] = typer.Option(
         None, "-o", "--output",
         help="Archivo destino: .gift o .xml según la extensión."),
-    listar: bool = typer.Option(False, "--listar", help="Lista las plantillas disponibles y sale."),
+    listar: bool = typer.Option(False, "--listar", "--list", help="Lista las plantillas disponibles y sale."),
     output_json: bool = typer.Option(False, "--json", help="Emite el resultado como JSON versionado."),
 ):
     """daedalus en belmont: sintetiza preguntas de C verificadas con GCC.

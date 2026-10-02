@@ -185,3 +185,31 @@ def test_dry_run_en_todos_los_comandos_que_escriben(tmp_path):
     # Al menos los que tienen algo que hacer lo anuncian.
     assert "[SIMULACIÓN]" in runner.invoke(cli, ["fix", "slugify", str(raiz), "-n"]).output
     assert "[SIMULACIÓN]" in runner.invoke(cli, ["split", str(raiz), "-n"]).output
+
+
+def test_alias_en_ingles_de_las_opciones():
+    import re
+    from pathlib import Path
+
+    for comando in (["health"], ["dedup"], ["ai"], ["format"], ["verify"], ["synth"], ["fix", "code-chars"]):
+        ayuda = runner.invoke(cli, comando + ["--help"], terminal_width=200).output
+        assert ayuda, comando
+    fuentes = "".join(p.read_text(encoding="utf-8") for p in Path("src/questions/commands").glob("*.py"))
+    # Toda opción larga en castellano de esta lista lleva su alias inglés al lado.
+    for es, en in [("aplicar", "apply"), ("conservar", "keep"), ("estricto", "strict"), ("contexto", "context"),
+                   ("reclasificar", "reclassify"), ("desde", "since"), ("sin-cache", "no-cache")]:
+        assert re.findall(rf'"--{es}"(?!, "--{en}")', fuentes) == [], es
+
+
+def test_alias_en_ingles_funcionan(tmp_path):
+    import json
+
+    banco = tmp_path / "b"
+    banco.mkdir()
+    pregunta = "::P:: ¿Qué guarda un puntero en lenguaje C cuando se declara?\n{=Una dirección ~Un entero ~Nada}\n"
+    (banco / "a.gift").write_text(pregunta, encoding="utf-8")
+    (banco / "b.gift").write_text(pregunta, encoding="utf-8")
+    res = runner.invoke(cli, ["health", str(banco), "--strict", "--json"])
+    assert res.exit_code == 1 and json.loads(res.output)["resumen"]["total_advertencias"] > 0
+    res = runner.invoke(cli, ["dedup", str(banco), "-s", "0.9", "--apply", "--keep", "primera", "--log", str(tmp_path / "l")])
+    assert res.exit_code == 0 and (banco / "a.gift").exists() and not (banco / "b.gift").exists()

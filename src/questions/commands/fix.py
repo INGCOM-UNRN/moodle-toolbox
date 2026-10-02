@@ -105,7 +105,7 @@ def title_from_name_cmd(
 def code_indent(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
-    saltos: bool = typer.Option(False, "--saltos", help="Marcar también cada fin de línea con ↵."),
+    saltos: bool = typer.Option(False, "--saltos", "--newlines", help="Marcar también cada fin de línea con ↵."),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
 ):
     """Marca la indentación del código con · (un punto por espacio) en GIFT, XML y Markdown."""
@@ -130,7 +130,7 @@ def code_chars(
     to_normal: bool = typer.Option(True, "--to-normal", help="Convertir a normal (default)"),
     to_fullwidth: bool = typer.Option(False, "--to-fullwidth", help="Convertir a fullwidth"),
     marcas: bool = typer.Option(
-        True, "--marcas/--sin-marcas", help="Con --to-fullwidth, agregar las marcas · y ↵ (por defecto, sí)."
+        True, "--marcas/--sin-marcas", "--marks/--no-marks", help="Con --to-fullwidth, agregar las marcas · y ↵ (por defecto, sí)."
     ),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
 ):
@@ -159,7 +159,7 @@ def code_lang(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
     lenguaje: Optional[str] = typer.Option(
-        None, "--lenguaje", help="Lenguaje para los bloques en los que no se puede detectar (c, java, python…)."),
+        None, "--lenguaje", "--language", help="Lenguaje para los bloques en los que no se puede detectar (c, java, python…)."),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
 ):
     """Agrega la etiqueta de lenguaje (c, java, python) a los bloques ``` que no la tienen (GIFT, XML y Markdown)."""
@@ -182,7 +182,7 @@ def code_format(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
     estilo: Optional[str] = typer.Option(
-        None, "--estilo", help="Estilo de clang-format (por defecto: LLVM con 4 espacios, regla 0x0005h)."),
+        None, "--estilo", "--style", help="Estilo de clang-format (por defecto: LLVM con 4 espacios, regla 0x0005h)."),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
 ):
     """Formatea el código C y Java de las preguntas con clang-format, conservando la convención de cada archivo."""

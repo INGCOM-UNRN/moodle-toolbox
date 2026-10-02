@@ -25,7 +25,7 @@ def format_cmd(
     ),
     normal: bool = typer.Option(False, "--normal", help="Restaurar el código a caracteres normales (sin marcas)"),
     marcas: bool = typer.Option(
-        True, "--marcas/--sin-marcas", help="Con --fullwidth, agregar las marcas · y ↵ (por defecto, sí)."
+        True, "--marcas/--sin-marcas", "--marks/--no-marks", help="Con --fullwidth, agregar las marcas · y ↵ (por defecto, sí)."
     ),
     correct_first: bool = typer.Option(
         False, "--correct-first", help="Ordena las opciones de opción múltiple por porcentaje (la correcta primero)."
@@ -35,7 +35,7 @@ def format_cmd(
     ),
     diff: bool = typer.Option(False, "--diff", help="No escribir: mostrar los cambios como diff unificado."),
     desde: Optional[str] = typer.Option(
-        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+        None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
 ):
     """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵).
 

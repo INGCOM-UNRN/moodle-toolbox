@@ -24,22 +24,22 @@ def dedup(
         help="Similitud mínima (0–1) para considerar dos preguntas duplicadas.",
     ),
     conservar: str = typer.Option(
-        "completa", "--conservar", click_type=click.Choice(CRITERIOS),
+        "completa", "--conservar", "--keep", click_type=click.Choice(CRITERIOS),
         help="Cuál se conserva de cada grupo: la más completa (feedback, título, opciones) o la primera.",
     ),
     aplicar_cambios: bool = typer.Option(
-        False, "--aplicar", help="Eliminar de verdad (sin esta opción sólo se muestra lo que se eliminaría).",
+        False, "--aplicar", "--apply", help="Eliminar de verdad (sin esta opción sólo se muestra lo que se eliminaría).",
     ),
     log: Path = typer.Option(
         Path("dedup.log"), "--log",
         help="Con --aplicar, log (TSV, se agrega al final) de cada pregunta eliminada con las rutas completas.",
     ),
     confirmar_jev: bool = typer.Option(
-        False, "--confirmar-jev",
+        False, "--confirmar-jev", "--confirm-jev",
         help="Confirmar cada par con Jev (TypeSafe): sólo quedan los que evalúan exactamente lo mismo.",
     ),
     desde: Optional[str] = typer.Option(
-        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+        None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     tui: bool = typer.Option(
         False, "--tui", help="Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar (extra 'tui').",
     ),

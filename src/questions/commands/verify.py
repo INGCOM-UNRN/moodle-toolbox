@@ -31,16 +31,16 @@ def verify(
     paths: Optional[List[Path]] = typer.Argument(None, exists=True, help="Archivos .gift/.xml o directorios."),
     llm: bool = LLM_OPTION,
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Buscar recursivamente."),
-    todas: bool = typer.Option(False, "--todas", help="Verificar toda pregunta con código, no sólo las que piden la salida."),
+    todas: bool = typer.Option(False, "--todas", "--all", help="Verificar toda pregunta con código, no sólo las que piden la salida."),
     sanitizar: bool = typer.Option(
-        False, "--sanitizar", help="C: compilar con -fsanitize=address,undefined para detectar comportamiento indefinido."),
+        False, "--sanitizar", "--sanitize", help="C: compilar con -fsanitize=address,undefined para detectar comportamiento indefinido."),
     estilo: bool = typer.Option(
-        False, "--estilo",
+        False, "--estilo", "--style",
         help="Revisar el código C con las reglas de estilo de la cátedra (0x00XXh, requiere ripley). No cambia el código de salida."),
-    concurrencia: int = typer.Option(4, "--concurrencia", help="Compilaciones simultáneas."),
-    solo_problemas: bool = typer.Option(False, "--solo-problemas", help="Listar sólo las preguntas con problemas."),
+    concurrencia: int = typer.Option(4, "--concurrencia", "--concurrency", help="Compilaciones simultáneas."),
+    solo_problemas: bool = typer.Option(False, "--solo-problemas", "--only-problems", help="Listar sólo las preguntas con problemas."),
     desde: Optional[str] = typer.Option(
-        None, "--desde", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+        None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
     output_json: bool = typer.Option(False, "--json", help="Emite los resultados como JSON versionado."),
 ):
     """Compila y ejecuta el código de las preguntas de salida y compara con las opciones (gcc, javac).

@@ -24,7 +24,7 @@ def ai(
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Prompt personalizado o ruta a un archivo .txt con el prompt."),
     output: Optional[Path] = typer.Option(None, "--output", help="Directorio de salida (por defecto: output_<mode>)."),
     proveedor: Optional[str] = typer.Option(
-        None, "--proveedor", click_type=click.Choice(PROVEEDORES),
+        None, "--proveedor", "--provider", click_type=click.Choice(PROVEEDORES),
         help="Modelo de lenguaje para improve/multiply/transform/feedback/distractors: gemini o claude "
              "(por defecto: QUESTIONS_PROVEEDOR o gemini)."),
     model: Optional[str] = typer.Option(
@@ -34,20 +34,20 @@ def ai(
     in_place: bool = typer.Option(False, "-i", "--in-place", help="Escribir en la misma carpeta que el original."),
     suffix: Optional[str] = typer.Option(None, "--suffix", help="Sufijo para los nuevos archivos (usado con --in-place, ej: -ia)."),
     contexto: Optional[str] = typer.Option(
-        None, "--contexto", help="classify: curso y nivel de los estudiantes (calibra Bloom y dificultad)."),
-    concurrencia: int = typer.Option(4, "--concurrencia", help="classify: solicitudes simultáneas a Jev."),
-    reclasificar: bool = typer.Option(False, "--reclasificar", help="classify: volver a clasificar las ya clasificadas."),
+        None, "--contexto", "--context", help="classify: curso y nivel de los estudiantes (calibra Bloom y dificultad)."),
+    concurrencia: int = typer.Option(4, "--concurrencia", "--concurrency", help="classify: solicitudes simultáneas a Jev."),
+    reclasificar: bool = typer.Option(False, "--reclasificar", "--reclassify", help="classify: volver a clasificar las ya clasificadas."),
     tags: bool = typer.Option(False, "--tags", help="classify: escribir también tags de Moodle (bloom:…, dificultad-…)."),
     calibrar: Optional[Path] = typer.Option(
-        None, "--calibrar", exists=True,
+        None, "--calibrar", "--calibrate", exists=True,
         help="classify: comparar con una referencia CSV (archivo,titulo,bloom[,dificultad_enunciado,…]) sin escribir nada."),
-    opciones: int = typer.Option(4, "--opciones", help="distractors: cantidad de opciones a alcanzar por pregunta."),
+    opciones: int = typer.Option(4, "--opciones", "--options", help="distractors: cantidad de opciones a alcanzar por pregunta."),
     precio_entrada: Optional[float] = typer.Option(
-        None, "--precio-entrada", help="USD por millón de tokens de entrada, para estimar el costo."),
+        None, "--precio-entrada", "--input-price", help="USD por millón de tokens de entrada, para estimar el costo."),
     precio_salida: Optional[float] = typer.Option(
-        None, "--precio-salida", help="USD por millón de tokens de salida, para estimar el costo."),
+        None, "--precio-salida", "--output-price", help="USD por millón de tokens de salida, para estimar el costo."),
     sin_cache: bool = typer.Option(
-        False, "--sin-cache", help="No usar ni guardar respuestas en la caché (~/.cache/questions)."),
+        False, "--sin-cache", "--no-cache", help="No usar ni guardar respuestas en la caché (~/.cache/questions)."),
     dry_run: bool = typer.Option(
         False, "-n", "--dry-run",
         help="Mostrar lo que se enviaría (y cuánto se ahorra) sin llamar al modelo ni escribir archivos.",
