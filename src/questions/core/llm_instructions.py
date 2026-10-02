@@ -57,6 +57,7 @@ FIX_INSTRUCTIONS = r"""
 3. **Sincronización de Nombres**:
    - `fix name-from-title`: Sincroniza el nombre del archivo con el título interno `::Título::`.
    - `fix title-from-name`: Actualiza el título interno `::Título::` basándose en el nombre del archivo.
+   - `fix extension`: Renombra `.xml` ↔ `.gift` cuando el contenido es del otro formato (el resto de los comandos deduce el formato por la extensión). Corrélo antes que los demás en un banco heredado.
 4. **Caracteres Especiales**: Convierte caracteres críticos a fullwidth dentro de bloques de código (`fix code-chars --to-fullwidth`, en GIFT y XML). Referencia: docs/caracteres_especiales.md.
 5. **Lenguaje y formato del código**: `fix code-lang` etiqueta los bloques ``` sin lenguaje (C o Java) y `fix code-format` los formatea con clang-format (LLVM, sangría de 4).
 6. **Simulá primero**: todos los subcomandos aceptan `-n/--dry-run`.
