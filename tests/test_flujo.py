@@ -232,3 +232,20 @@ def test_barra_de_progreso_solo_en_terminal(monkeypatch):
     assert avance.activa
     monkeypatch.setenv("QUESTIONS_SIN_PROGRESO", "1")
     assert progreso.mostrar_progreso() is False
+
+
+def test_format_json(tmp_path):
+    import json
+
+    ok, mal = tmp_path / "ok.gift", tmp_path / "mal.gift"
+    ok.write_text("::A:: ¿Sí?\n{T}\n", encoding="utf-8")
+    runner.invoke(cli, ["format", str(ok)])
+    mal.write_text("::B::¿Sí?{T}", encoding="utf-8")
+    res = runner.invoke(cli, ["format", str(tmp_path), "--check", "--json"])
+    datos = json.loads(res.output)
+    assert res.exit_code == 1 and datos["modo"] == "check" and datos["archivos"] == 2
+    assert [p.rsplit("/", 1)[-1] for p in datos["cambian"]] == ["mal.gift"] and datos["errores"] == []
+    res = runner.invoke(cli, ["format", str(tmp_path), "--json"])
+    assert json.loads(res.output)["modo"] == "escritura"
+    datos = json.loads(runner.invoke(cli, ["format", str(tmp_path), "--check", "--json"]).output)
+    assert datos["cambian"] == []

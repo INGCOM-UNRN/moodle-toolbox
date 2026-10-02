@@ -9,7 +9,7 @@ from questions.core.banco import expandir_rutas, filtrar_desde, formato_de
 from questions.core.codigo import transformar_archivo
 from questions.core.formatter import format_content
 
-from questions.commands.common import LLM_OPTION, con_configuracion, fail
+from questions.commands.common import LLM_OPTION, con_configuracion, emitir_json, fail
 
 
 def format_cmd(
@@ -36,6 +36,7 @@ def format_cmd(
     diff: bool = typer.Option(False, "--diff", help="No escribir: mostrar los cambios como diff unificado."),
     desde: Optional[str] = typer.Option(
         None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+    output_json: bool = typer.Option(False, "--json", help="Emite el resultado (archivos que cambian y errores) como JSON versionado."),
 ):
     """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵).
 
@@ -62,11 +63,17 @@ def format_cmd(
             fail(str(e))
 
     if not files:
-        click.echo("No se encontraron archivos para procesar.")
+        if output_json:
+            emitir_json("format", {"modo": _modo(check, diff, dry_run), "archivos": 0, "cambian": [], "errores": []})
+        else:
+            click.echo("No se encontraron archivos para procesar.")
         return
 
     modified_count = 0
     errores = 0
+    cambian, fallidos = [], []
+    # Con --json no se imprime nada más (salvo el diff, que con --json no se emite).
+    echo = (lambda *a, **k: None) if output_json else click.echo
 
     for f in sorted(files):
         try:
@@ -88,22 +95,30 @@ def format_cmd(
                 modified = format_content(modified, formato, correct_first=correct_first)
 
             if content != modified:
-                if diff:
+                cambian.append(str(f))
+                if diff and not output_json:
                     click.echo("".join(difflib.unified_diff(
                         content.splitlines(keepends=True), modified.splitlines(keepends=True),
                         fromfile=f"a/{f}", tofile=f"b/{f}")), nl=False)
-                elif check:
-                    click.echo(f"[CAMBIARÍA] {f}")
+                elif check or (diff and output_json):
+                    echo(f"[CAMBIARÍA] {f}")
                 else:
                     if not dry_run:
                         f.write_text(modified, encoding='utf-8')
                     status = "[SIMULACIÓN]" if dry_run else "[MODIFICADO]"
-                    click.echo(f"{status} {f}")
+                    echo(f"{status} {f}")
                 modified_count += 1
         except Exception as e:
             errores += 1
-            click.echo(f"Error procesando {f}: {e}", err=True)
+            fallidos.append({"archivo": str(f), "error": str(e)})
+            echo(f"Error procesando {f}: {e}", err=True)
 
+    if output_json:
+        emitir_json("format", {"modo": _modo(check, diff, dry_run), "archivos": len(files),
+                               "cambian": cambian, "errores": fallidos})
+        if check and (modified_count or errores):
+            raise typer.Exit(code=1)
+        return
     if diff:
         return
     if check:
@@ -114,3 +129,11 @@ def format_cmd(
         click.echo(f"{len(files)} archivos con el formato estándar.")
         return
     click.echo(f"\nResumen: {len(files)} archivos procesados, {modified_count} modificados.")
+
+
+def _modo(check: bool, diff: bool, dry_run: bool) -> str:
+    if check:
+        return "check"
+    if diff:
+        return "diff"
+    return "simulacion" if dry_run else "escritura"
