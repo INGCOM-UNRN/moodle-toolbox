@@ -17,6 +17,18 @@ versiones según [SemVer](https://semver.org/lang/es/).
 - **ai --mode classify**: clasifica cada pregunta (GIFT o XML) con Jev de TypeSafe: nivel de Bloom (choice B1–B6) y dificultad del enunciado y de las respuestas (scores 1–5), en una solicitud por pregunta sin la retroalimentación. Escribe un comentario por pregunta (`// [bloom:B3-aplicar] [dificultad-enunciado:3.7/5] …` o `<!-- … -->`), saltea las ya clasificadas salvo `--reclasificar`, `--tags` agrega tags de Moodle y `config set-typesafe-key` guarda la clave.
 - **health**: separa errores (lo que Moodle no importaría o importaría mal) de advertencias; sale con código 1 si hay errores y `--estricto` también falla con advertencias.
 - **código**: un único módulo (`questions.core.codigo`) para fullwidth y marcas en GIFT y XML, con la forma normal de GIFT escapada y las variantes históricas (U+2007, U+037E) llevadas a `·` y `；`.
+- **verify**: compila y ejecuta el código C y Java de las preguntas (gcc, javac) y compara la salida con la clave: avisa si la salida coincide con un distractor, si el código no compila, falla, no termina o tiene comportamiento indefinido (`--sanitizar`). `--estilo` revisa el código C con las reglas de la cátedra (ripley).
+- **health**: distribución de Bloom y dificultad, blueprint categoría × Bloom y categorías sin niveles altos (de los comentarios de `classify`); señales de redacción (posición de la correcta, «todas/ninguna de las anteriores», negaciones sin resaltar, distractores débiles); campos de Moodle inconsistentes en una categoría (penalización, puntaje, numeración, mezcla); líneas `//` que GIFT descarta y bloques ``` sin lenguaje; `--csv` con una fila por pregunta y todas sus señales; `--json` y `--md` juntos escriben ambos.
+- **health --tui**: interfaz de terminal para recorrer los hallazgos, ver cada pregunta en su archivo, abrirla en `$EDITOR` y aplicar los arreglos automáticos (proteger el código, etiquetar el lenguaje, limpiar HTML) a un archivo o a todos los del hallazgo.
+- **ai**: modos `feedback` (completa sólo la retroalimentación que falta) y `distractors` (agrega distractores hasta `--opciones`, también cuando la correcta delata por su largo); proveedor configurable entre Gemini y Claude (`--proveedor`, `config set-provider`, `config set-anthropic-key`); estimación de tokens y costo (`--precio-entrada`, `--precio-salida`); caché de respuestas por contenido (`--sin-cache`).
+- **ai --mode classify**: `--calibrar referencias.csv` mide la concordancia con una clasificación hecha por docentes (exacta, ±1 nivel, kappa, matriz, error de dificultad) sin escribir nada; `--revisar` abre una interfaz de terminal para corregir las clasificaciones con poca confianza (1–6 Bloom, +/- dificultad), que quedan como `manual` (reclasificar no las pisa) y se agregan a `--referencias`.
+- **dedup**: `--confirmar-jev` confirma cada par con Jev y descarta los que no evalúan lo mismo; `--aplicar` guarda una copia completa de cada archivo modificado o borrado en `--respaldo` y `--restaurar ultimo` lo deshace sin pisar ediciones posteriores.
+- **fix**: `code-lang` etiqueta el lenguaje de los bloques ``` (C o Java); `code-format` formatea el código C y Java con clang-format.
+- **format**: `--check` (sale con 1 si algo cambiaría) y `--diff`, para CI y pre-commit; `--json`.
+- **moodle subir**: sube un banco a un curso de Moodle por servicio web (requiere el plugin `local_questions_importer_ws` en el sitio): convierte y unifica GIFT/XML, lo sube al área de borradores e importa con sus categorías.
+- **configuración por banco**: `.questions.toml` en la raíz del repositorio con los valores por defecto de `health`, `format`, `dedup` y `ai`, y `[general] ignorar` para excluir rutas; las opciones de la línea de comandos tienen prioridad.
+- **integración**: `.pre-commit-hooks.yaml` (format, health, validate) y una acción de GitHub (`uses: INGCOM-UNRN/moodle-toolbox@main`) que revisa la salud de lo que cambia en un PR, publica el informe en el resumen y en el PR, y falla ante errores.
+- **cli**: `--desde <rev>` en `health`, `format`, `validate`, `verify` y `dedup` para procesar sólo lo cambiado desde una revisión git; `-n/--dry-run` en todos los comandos que escriben; alias en inglés de las opciones en castellano (`--apply`, `--keep`, `--strict`, `--since`…); barra de progreso en `health`, `classify` y `verify` cuando la salida es una terminal.
 
 ### Corregido
 
@@ -31,6 +43,25 @@ versiones según [SemVer](https://semver.org/lang/es/).
 - **ai**: los comentarios del XML (`<!-- question: … -->`) se perdían al escribir.
 - **parser**: los títulos GIFT se desescapan (`::C\\: punteros::`).
 - **analyze similar**: filtrado por prefijos exacto; un repositorio de 10 mil preguntas pasa de más de una hora a segundos.
+- **parser**: una pregunta sin su `}` (o con llaves sin proteger en el código) ya no se traga las preguntas siguientes: la línea en blanco corta igual si lo que sigue es otra pregunta o una `$CATEGORY`.
+- **parser**: escapes en preguntas numéricas y de emparejamiento; la retroalimentación de verdadero/falso se lee en el orden de Moodle (`{T#si-responde-mal#si-responde-bien}`).
+- **convert**: conserva el crédito parcial de las respuestas cortas; serializa el XML sin desescapar el documento ni borrar líneas en blanco; `xml-to-gift` pasa por el modelo unificado sin pérdidas y protege también el enunciado de los cloze (antes una línea en blanco de un `<pre>` partía la pregunta); `html-to-md` cambia el formato sólo de los campos que convierte.
+- **tree export / unify**: separan las preguntas como el parser (antes partían las que tenían líneas en blanco en el código), export toma el título del parser (un comentario `// CAT: …::` lo confundía), conserva los comentarios y exporta las preguntas sin título; unify protege las barras del código respetando los escapes de GIFT (`\\0` quedaba como dos barras).
+- **split**: cada archivo GIFT resultante lleva su `$CATEGORY`.
+- **analyze similar / dedup**: IDF suavizado; dos preguntas idénticas en un conjunto chico ya no quedan con similitud 0.
+- **validate / analyze**: salen con código 1 cuando hay hallazgos.
+
+### Cambiado
+
+- `GiftAnalyzer` pasa a llamarse `AnalizadorBanco` (queda el alias); el lector de unidades vive en `questions.core.lector` (reexportado desde `questions.core.ai`).
+- El contrato del modelo de preguntas pasa a 1.1.0: claves `metadata` (clasificación, con su `confianza`) y `moodle` (penalización, puntaje, mezcla, numeración, respuesta única).
+- `health` lee y resuelve cada archivo una sola vez (≈13 % más rápido en bancos de miles de archivos).
+- Se quitan los `main()` con argparse de `parser.py` y `validator.py` y `estandarizar_nombre_pregunta`, que no usaba ningún comando.
+
+### Mantenimiento
+
+- **ci**: ruff exige también F401 y F841; mypy sobre `src/questions/core`.
+- **tests**: corpus sintético (`tests/data/corpus`) con invariantes de formato, conversión, unificación/exportación y salud; las mismas verificaciones corren sobre bancos reales con `QUESTIONS_BANCOS=/banco1:/banco2` (sólo lectura).
 
 ## [0.2.0] - 2026-09-28
 
