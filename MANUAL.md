@@ -423,6 +423,8 @@ Abre el editor web local (cerebro) sobre DIRECTORIO.
     Permite navegar y editar preguntas en Moodle XML y GIFT desde el navegador.
     Requiere el extra 'ui': uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
 
+Cada pregunta del árbol muestra su cantidad de opciones (respuestas en opción múltiple y respuesta corta, pares en emparejamiento). El filtro **Opciones: menos de / exactamente / más de N** de la barra lateral deja sólo las preguntas que cumplen la condición, para encontrar las que tienen pocas opciones; la navegación anterior/siguiente recorre sólo las filtradas. Las preguntas sin opciones (verdadero/falso, ensayo, descripción) quedan afuera mientras el filtro está activo.
+
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
