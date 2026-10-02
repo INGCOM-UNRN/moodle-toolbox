@@ -11,7 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from questions.cli import cli
-from questions.core.ai import leer_archivos, unidades_de
+from questions.core.lector import leer_archivos, unidades_de
 from questions.core.converter import gift_to_xml
 from questions.core.deduplicar import Revision, agrupar, aplicar, registrar
 

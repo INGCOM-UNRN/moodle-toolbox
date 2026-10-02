@@ -18,7 +18,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
-from questions.core.ai import Archivo, Unidad
+from questions.core.lector import Archivo, Unidad
 from questions.core.clasificacion import BLOOM, CODIGO_BLOOM, Clasificacion, confianza_minima, corregida, guardar_correcciones
 from questions.core.converter import question_to_gift
 

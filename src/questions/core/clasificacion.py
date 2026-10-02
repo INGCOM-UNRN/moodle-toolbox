@@ -32,7 +32,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional
 
-from questions.core.ai import Archivo, Unidad, _compactar, leer_archivos, unidades_de
+from questions.core.lector import Archivo, Unidad, _compactar, leer_archivos, unidades_de
 from questions.core.cache import Cache
 from questions.core.gift_model import Question
 from questions.core.tree import serializar_quiz

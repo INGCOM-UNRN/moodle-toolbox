@@ -9,7 +9,7 @@ import click
 import typer
 
 from questions.commands.common import LLM_OPTION, con_configuracion, emitir_json, fail
-from questions.core.ai import leer_archivos, unidades_de
+from questions.core.lector import leer_archivos, unidades_de
 from questions.core.banco import archivos_cambiados, expandir_rutas
 from questions.core.deduplicar import CRITERIOS, a_json, agrupar, aplicar, plan, registrar, respaldos, restaurar
 

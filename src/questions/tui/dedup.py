@@ -18,7 +18,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Label, ListItem, ListView, Static
 
-from questions.core.ai import Archivo, Unidad
+from questions.core.lector import Archivo, Unidad
 from questions.core.converter import question_to_gift
 from questions.core.deduplicar import Revision, aplicar, registrar
 

@@ -27,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from questions.core.ai import Archivo, Unidad
+from questions.core.lector import Archivo, Unidad
 from questions.core.codigo import transformar_codigo
 from questions.core.gift_model import Question
 from questions.core.tree import serializar_quiz

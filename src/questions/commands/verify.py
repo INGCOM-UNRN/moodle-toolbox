@@ -11,7 +11,7 @@ import click
 import typer
 
 from questions.commands.common import LLM_OPTION, emitir_json, fail
-from questions.core.ai import leer_archivos, unidades_de
+from questions.core.lector import leer_archivos, unidades_de
 from questions.core.banco import expandir_rutas, filtrar_desde
 from questions.core.verificar import PROBLEMAS, verificar
 

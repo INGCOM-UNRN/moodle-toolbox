@@ -253,7 +253,7 @@ def _leer_revision(tmp_path):
     import contextlib
     import io
 
-    from questions.core.ai import leer_archivos, unidades_de
+    from questions.core.lector import leer_archivos, unidades_de
 
     ruta = tmp_path / "banco.gift"
     if not ruta.exists():

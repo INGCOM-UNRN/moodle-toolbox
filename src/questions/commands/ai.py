@@ -175,7 +175,7 @@ def _revisar_clasificacion(rutas: List[Path], umbral: float, tags: bool, referen
     import contextlib
     import io
 
-    from questions.core.ai import leer_archivos, unidades_de
+    from questions.core.lector import leer_archivos, unidades_de
     from questions.core.clasificacion import para_revisar
 
     try:
