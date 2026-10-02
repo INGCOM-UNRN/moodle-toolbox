@@ -21,7 +21,11 @@ def validate(
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold para duplicados"),
     output_json: bool = typer.Option(False, "-j", "--json", help="Salida en JSON"),
 ):
-    """Valida archivos o directorios de preguntas GIFT y Moodle XML."""
+    """Valida archivos o directorios de preguntas GIFT y Moodle XML.
+
+    Sale con código 1 si algún archivo no se puede interpretar o se detectan problemas
+    (preguntas vacías, sin respuesta correcta, archivos sin preguntas…).
+    """
     if not paths:
         paths = ['.']
         
@@ -77,3 +81,6 @@ def validate(
             "directories": analyzer.to_json() if dirs_to_validate else None
         }
         click.echo(json.dumps(output_data, indent=2, ensure_ascii=False))
+
+    if analyzer.stats.invalid_files or analyzer.issues:
+        raise typer.Exit(code=1)

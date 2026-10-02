@@ -26,7 +26,10 @@ def stats(
     output: Optional[str] = typer.Option(None, "-o", "--output", help="Archivo de salida para el informe"),
     output_json: bool = typer.Option(False, "--json", help="Emite las estadísticas como JSON versionado"),
 ):
-    """Genera estadísticas de un repositorio de preguntas (GIFT y Moodle XML)."""
+    """Genera estadísticas de un repositorio de preguntas (GIFT y Moodle XML).
+
+    Sale con código 1 si algún archivo no se puede interpretar.
+    """
     if not paths:
         paths = ['.']
         
@@ -42,10 +45,12 @@ def stats(
         analyzer.find_duplicates()
     if output_json:
         emitir_json("analyze stats", analyzer.to_json())
-        return
-    report = analyzer.generate_report(output)
-    if not output:
-        click.echo(report)
+    else:
+        report = analyzer.generate_report(output)
+        if not output:
+            click.echo(report)
+    if analyzer.stats.invalid_files:
+        raise typer.Exit(code=1)
 
 @analyze_app.command(name="similar")
 def similar(
@@ -54,7 +59,10 @@ def similar(
     similarity: float = typer.Option(0.85, "-s", "--similarity", help="Threshold de similitud"),
     output_json: bool = typer.Option(False, "--json", help="Emite los pares similares como JSON versionado"),
 ):
-    """Encuentra preguntas similares o duplicadas en un repositorio (GIFT y Moodle XML, también entre formatos)."""
+    """Encuentra preguntas similares o duplicadas en un repositorio (GIFT y Moodle XML, también entre formatos).
+
+    Sale con código 1 si encuentra pares por encima del umbral.
+    """
     if not paths:
         paths = ['.']
         
@@ -71,6 +79,8 @@ def similar(
 
     if output_json:
         emitir_json("analyze similar", {"umbral": similarity, "pares": analyzer.to_json()["duplicates"]})
+        if analyzer.duplicates:
+            raise typer.Exit(code=1)
         return
 
     if analyzer.duplicates:
@@ -81,5 +91,5 @@ def similar(
             click.echo(f"- Similitud {dup['similarity']:.3f}:")
             click.echo(f"  A: {q1['filepath']} - {q1['title']}")
             click.echo(f"  B: {q2['filepath']} - {q2['title']}")
-    else:
-        click.echo("No se encontraron duplicados significativos.")
+        raise typer.Exit(code=1)
+    click.echo("No se encontraron duplicados significativos.")

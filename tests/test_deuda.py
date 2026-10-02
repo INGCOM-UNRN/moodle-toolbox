@@ -107,3 +107,22 @@ def test_verdadero_falso_en_el_orden_de_moodle():
     assert retro == {"true": "Bien", "false": "Repasá"}
     assert "{T#Repasá#Bien}" in xml_to_gift(xml)
     assert "{T##Bien}" in xml_to_gift(gift_to_xml("::S:: ¿Sí? {T##Bien}"))
+
+
+def test_validate_y_analyze_salen_con_1_ante_hallazgos(tmp_path):
+    from click.testing import CliRunner
+
+    from questions.cli import cli
+
+    runner = CliRunner()
+    (tmp_path / "ok.gift").write_text("::A:: ¿2+2? {=4 ~3 ~5}\n", encoding="utf-8")
+    assert runner.invoke(cli, ["validate", str(tmp_path / "ok.gift")]).exit_code == 0
+    assert runner.invoke(cli, ["analyze", "stats", str(tmp_path)]).exit_code == 0
+    assert runner.invoke(cli, ["analyze", "similar", str(tmp_path)]).exit_code == 0
+
+    (tmp_path / "mal.gift").write_text("::B:: ¿2+2? {~4 ~3}\n", encoding="utf-8")  # sin correcta
+    (tmp_path / "roto.xml").write_text("<quiz><question>", encoding="utf-8")
+    assert runner.invoke(cli, ["validate", str(tmp_path)]).exit_code == 1
+    assert runner.invoke(cli, ["analyze", "stats", str(tmp_path), "--json"]).exit_code == 1
+    (tmp_path / "copia.gift").write_text("::A:: ¿2+2? {=4 ~3 ~5}\n", encoding="utf-8")
+    assert runner.invoke(cli, ["analyze", "similar", str(tmp_path), "--json"]).exit_code == 1
