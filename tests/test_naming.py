@@ -1,4 +1,3 @@
-from pathlib import Path
 from questions.core.naming import slugify, get_question_title, set_question_title
 
 def test_slugify():

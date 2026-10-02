@@ -1,9 +1,7 @@
 import re
-import html
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
-from questions.core.parser import GiftParser, Question, FormattedText
+from questions.core.parser import GiftParser, Question
 
 
 def convert_html_tags_to_markdown(text):

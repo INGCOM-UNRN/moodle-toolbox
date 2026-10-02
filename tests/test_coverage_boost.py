@@ -1,10 +1,7 @@
 """Tests adicionales para maximizar la cobertura en MOODLE-TOOLBOX."""
 
-from pathlib import Path
 from click.testing import CliRunner
 from questions.cli import cli
-from questions.core.converter import convert_html_tags_to_markdown, gift_to_xml, xml_to_gift
-from questions.core.splitter import split_file
 
 runner = CliRunner()
 

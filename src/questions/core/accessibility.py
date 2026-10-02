@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import List, Dict, Any
+from typing import Dict, Any
 
 
 def validar_accesibilidad_imagenes(contenido_html: str) -> Dict[str, Any]:

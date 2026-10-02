@@ -1,7 +1,7 @@
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 from questions.core.xml_tools import sanitize_filename
 
 def extract_title(question_text: str) -> str:

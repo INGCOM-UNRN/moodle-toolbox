@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import List, Dict, Any
-from pathlib import Path
 
 
 def exportar_catalogo_markdown(preguntas: List[Dict[str, Any]], titulo: str = "Catálogo de Preguntas") -> str:

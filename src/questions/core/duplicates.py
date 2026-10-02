@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import difflib
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 
 def detectar_preguntas_duplicadas(preguntas: List[Dict[str, Any]], umbral_similitud: float = 0.85) -> List[Dict[str, Any]]:

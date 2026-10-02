@@ -25,6 +25,13 @@ except ImportError as error:  # sin el extra `languagetool` (myst-tools)
         name="myst_tools",
     ) from error
 
+# API de myst-tools que este módulo reexporta para el resto del paquete y los tests.
+__all__ = [
+    "DEFAULT_LANGUAGETOOL_URL", "DEFAULT_LANGUAGETOOL_PREMIUM_URL", "LOCAL_LANGUAGETOOL_URL",
+    "PALABRAS_IGNORADAS_DEFAULT", "LanguageToolIssue", "consultar_languagetool", "analizar_texto_languagetool",
+    "aplicar_autofix_archivo", "generar_reporte_markdown_languagetool",
+]
+
 
 def enmascarar_gift_xml(contenido: str) -> Tuple[str, List[Dict[str, Any]]]:
     """Enmascara etiquetas XML/HTML, sintaxis GIFT, fórmulas LaTeX y bloques de código."""

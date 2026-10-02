@@ -2,7 +2,6 @@
 `GiftParser()` y verificada por el doctor como "requerida", pero su único camino de parseo
 (`_parse_raw`) no se llamaba desde ningún lado: todo usa el parser manual."""
 
-import importlib
 import subprocess
 import sys
 import textwrap

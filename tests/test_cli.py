@@ -1,6 +1,5 @@
 from click.testing import CliRunner
 from questions.cli import cli
-from pathlib import Path
 
 def test_cli_help():
     runner = CliRunner()

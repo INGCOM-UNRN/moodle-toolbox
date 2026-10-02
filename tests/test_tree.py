@@ -1,4 +1,3 @@
-import pytest
 
 from questions.core import tree
 

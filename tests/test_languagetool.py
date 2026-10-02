@@ -14,8 +14,6 @@ from questions.core.languagetool_checker import (
     consultar_languagetool,
     analizar_archivo_banco,
     aplicar_autofix_archivo_banco,
-    generar_reporte_markdown_languagetool,
-    LanguageToolIssue,
 )
 
 runner = CliRunner()

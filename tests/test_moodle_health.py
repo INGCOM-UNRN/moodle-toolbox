@@ -1,5 +1,3 @@
-import pytest
-from pathlib import Path
 from questions.core.moodle_health import (
     verificar_porcentajes_opciones,
     estandarizar_nombre_pregunta,

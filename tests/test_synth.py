@@ -1,7 +1,6 @@
 """Tests para el sintetizador de preguntas de C en moodle-toolbox delegando en alucarD."""
 
 import shutil
-from pathlib import Path
 import pytest
 from click.testing import CliRunner
 

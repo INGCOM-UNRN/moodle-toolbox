@@ -1,4 +1,3 @@
-import pytest
 
 from questions.core.converter import gift_to_xml, xml_to_gift
 from questions.core.parser import GiftParser

@@ -1,6 +1,5 @@
 import re
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
 def sanitize_filename(text: str, max_length: int = 100) -> str:
     """Sanitiza un texto para usarlo como nombre de archivo."""

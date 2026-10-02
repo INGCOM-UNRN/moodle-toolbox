@@ -15,9 +15,7 @@ from typing import List, Optional, Sequence, Tuple, Union
 from questions.core.converter import _cdata_sub
 from questions.core.tree import (
     _protect_backslashes_in_code,
-    gift_collect,
     serializar_quiz,
-    xml_collect,
 )
 
 

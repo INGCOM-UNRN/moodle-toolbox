@@ -8,9 +8,7 @@ import re
 import json
 import argparse
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
-from typing import Optional, Any
-from enum import Enum
+from typing import Optional
 
 from questions.core.gift_model import (  # noqa: F401
     QuestionType, FormattedText, Choice, MatchPair, NumericalAnswer, Question,
@@ -102,7 +100,6 @@ class GiftParser:
                 
                 cat_title = stripped[10:].strip()
                 questions.append(Question(type="Category", title=cat_title))
-                pending_blank = False
                 i += 1
                 continue
             

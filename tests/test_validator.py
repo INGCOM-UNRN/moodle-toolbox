@@ -1,5 +1,4 @@
 from questions.core.validator import GiftAnalyzer
-from pathlib import Path
 
 def test_analyzer_basic(tmp_path):
     f1 = tmp_path / "q1.gift"

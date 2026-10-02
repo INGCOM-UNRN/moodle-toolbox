@@ -1,4 +1,3 @@
-from pathlib import Path
 from questions.core.splitter import split_file
 
 def test_split_file(tmp_path):

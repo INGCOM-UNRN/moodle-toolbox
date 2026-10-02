@@ -1,4 +1,3 @@
-import pytest
 from questions.core.parser import parse_gift_file
 
 def test_parse_simple_gift(tmp_path):

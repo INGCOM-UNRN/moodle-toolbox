@@ -4,7 +4,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from questions.cli import cli
-from questions.core.unifier import unificar, unificar_gift, unificar_xml
+from questions.core.unifier import unificar
 
 runner = CliRunner()
 
