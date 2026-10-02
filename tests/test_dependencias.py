@@ -20,13 +20,17 @@ def test_google_genai_esta_en_el_extra_ai_y_no_en_las_dependencias_base():
 
 
 def test_el_modulo_ai_se_importa_aunque_falte_google_genai(monkeypatch):
-    import importlib
+    import importlib.util
     import sys
 
+    import questions.core.ai as original
+
+    # Una copia aislada del módulo: recargar el real dejaría clases viejas (Unidad…) en
+    # los módulos que ya lo importaron y rompería los tests que corren después.
     monkeypatch.setitem(sys.modules, "google", None)
-    modulo = importlib.reload(importlib.import_module("questions.core.ai"))
-    try:
-        assert modulo.genai is None
-    finally:
-        monkeypatch.undo()
-        importlib.reload(modulo)
+    spec = importlib.util.spec_from_file_location("ai_sin_google_genai", original.__file__)
+    modulo = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, modulo)  # @dataclass busca el módulo en sys.modules
+    spec.loader.exec_module(modulo)
+    assert modulo.genai is None
+    assert original.genai is not None or "google" not in sys.modules
