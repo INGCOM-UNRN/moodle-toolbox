@@ -213,3 +213,21 @@ def test_alias_en_ingles_funcionan(tmp_path):
     assert res.exit_code == 1 and json.loads(res.output)["resumen"]["total_advertencias"] > 0
     res = runner.invoke(cli, ["dedup", str(banco), "-s", "0.9", "--apply", "--keep", "primera", "--log", str(tmp_path / "l")])
     assert res.exit_code == 0 and (banco / "a.gift").exists() and not (banco / "b.gift").exists()
+
+
+def test_barra_de_progreso_solo_en_terminal(monkeypatch):
+    import io
+
+    from questions.core import progreso
+
+    with progreso.barra(10, "x") as avance:  # en los tests stderr no es una terminal
+        avance()
+    assert not avance.activa
+    salida = io.StringIO()
+    monkeypatch.setattr("sys.stderr", salida)
+    with progreso.barra(3, "Auditando", activa=True) as avance:
+        for _ in range(3):
+            avance()
+    assert avance.activa
+    monkeypatch.setenv("QUESTIONS_SIN_PROGRESO", "1")
+    assert progreso.mostrar_progreso() is False

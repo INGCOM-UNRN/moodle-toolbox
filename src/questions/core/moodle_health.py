@@ -24,7 +24,7 @@ import re
 from collections import Counter
 from pathlib import Path
 from statistics import mean
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from questions.core.banco import formato_de, parse_archivo
 from questions.core.codigo import diagnosticar_codigo, transformar_textos_xml
@@ -536,6 +536,7 @@ def auditar_archivos(
     umbral_longitud: float = UMBRAL_LONGITUD,
     contenidos: Optional[Dict[Path, str]] = None,
     con_preguntas: bool = False,
+    avance: Optional[Callable[[], None]] = None,
 ) -> Dict[str, Any]:
     """Audita un conjunto de archivos GIFT y/o XML como un único banco.
 
@@ -554,6 +555,8 @@ def auditar_archivos(
     base = Path(os.path.commonpath([str(Path(a).resolve().parent) for a in archivos])) if archivos else Path(".")
 
     for ruta in archivos:
+        if avance is not None:
+            avance()
         formato = formato_de(ruta) or "gift"
         por_formato[formato] += 1
         if contenidos and ruta in contenidos:

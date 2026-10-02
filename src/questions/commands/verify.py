@@ -71,11 +71,16 @@ def verify(
         if verificador is None:
             fail(f"--estilo usa las reglas de ripley, que no está instalado en este entorno: {INSTALAR_RIPLEY}")
 
-    def uno(u):
-        return u, verificar(u.pregunta, sanitizar=sanitizar, todas=todas)
+    from questions.core.progreso import barra
 
-    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
-        resultados = [(u, r) for u, r in ejecutor.map(uno, unidades) if r is not None]
+    with barra(len(unidades), "Compilando y ejecutando") as avance:
+        def uno(u):
+            r = verificar(u.pregunta, sanitizar=sanitizar, todas=todas)
+            avance()
+            return u, r
+
+        with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
+            resultados = [(u, r) for u, r in ejecutor.map(uno, unidades) if r is not None]
 
     estilos = []
     if verificador is not None:

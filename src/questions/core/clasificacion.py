@@ -367,9 +367,13 @@ def run_clasificacion(file_paths: List[Path], output_dir: Optional[Path], in_pla
         return unidad, datos
 
     print(f"🚀 Clasificando con {MODELO} ({concurrencia} solicitudes en paralelo)...")
-    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
+    from questions.core.progreso import barra
+
+    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor, \
+            barra(len(pendientes), "Clasificando") as avance:
         futuros = [ejecutor.submit(clasificar, u) for u in pendientes]
         for n, futuro in enumerate(futuros, 1):
+            avance()
             try:
                 unidad, datos = futuro.result()
                 resultados[id(unidad)] = Clasificacion.desde_respuesta(datos)
@@ -378,7 +382,7 @@ def run_clasificacion(file_paths: List[Path], output_dir: Optional[Path], in_pla
             except Exception as e:  # noqa: BLE001 - una falla no detiene el resto
                 errores += 1
                 print(f"  ⚠️ {pendientes[n - 1].archivo.name}: {e}")
-            if n % 50 == 0 or n == len(futuros):
+            if not avance.activa and (n % 50 == 0 or n == len(futuros)):
                 print(f"  {n}/{len(futuros)}")
 
     print("💾 Guardando resultados...")
@@ -462,12 +466,17 @@ def calibrar(referencias: List[dict], cliente: ClienteJev, contexto: str = CONTE
     unidades = [u for u in unidades_de(leer_archivos(rutas)) if u.pregunta is not None]
     pares = [(r, u) for r in referencias for u in [_buscar(unidades, r)] if u is not None]
 
-    def clasificar(par):
-        r, u = par
-        return r, Clasificacion.desde_respuesta(cliente.consultar(estado(u.pregunta, contexto), preguntas_jev(u.pregunta)))
+    from questions.core.progreso import barra
 
-    with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
-        resultados = list(ejecutor.map(clasificar, pares))
+    with barra(len(pares), "Calibrando") as avance:
+        def clasificar(par):
+            r, u = par
+            datos = cliente.consultar(estado(u.pregunta, contexto), preguntas_jev(u.pregunta))
+            avance()
+            return r, Clasificacion.desde_respuesta(datos)
+
+        with ThreadPoolExecutor(max_workers=max(1, concurrencia)) as ejecutor:
+            resultados = list(ejecutor.map(clasificar, pares))
     return medir_concordancia(resultados, sin_encontrar=len(referencias) - len(pares))
 
 

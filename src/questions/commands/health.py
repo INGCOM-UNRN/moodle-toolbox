@@ -80,8 +80,11 @@ def health_cmd(
                 if not output_json:
                     click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}HTML obsoleto y estilos inline: {archivo}")
 
-    resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud,
-                                 con_preguntas=output_csv is not None)
+    from questions.core.progreso import barra
+
+    with barra(len(archivos), "Auditando") as avance:
+        resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud,
+                                     con_preguntas=output_csv is not None, avance=avance)
     if output_csv is not None:
         filas = escribir_csv(resultado.pop("_preguntas"), output_csv)
         if not output_json:
