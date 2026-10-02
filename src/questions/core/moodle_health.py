@@ -756,19 +756,6 @@ def auditar_retroalimentaciones(texto_gift: str) -> Dict[str, Any]:
     return auditar_feedback(_preguntas_gift(texto_gift))
 
 
-def estandarizar_nombre_pregunta(
-    titulo_actual: str,
-    materia: str = "P1",
-    tema: str = "General",
-    bloom: str = "B2"
-) -> str:
-    """
-    Estandariza el título con el prefijo institucional [Materia][Tema][Bloom].
-    """
-    limpio = re.sub(r"^\[.*?\]\s*", "", titulo_actual).strip()
-    return f"[{materia}][{tema}][{bloom}] {limpio}"
-
-
 def convertir_windows1252_a_utf8(contenido_bytes: bytes) -> str:
     """
     Convierte bytes con codificación Windows-1252 / Latin-1 a string UTF-8 limpio.

@@ -5,8 +5,6 @@ Parser para archivos GIFT: recorre el contenido por bloques y arma el modelo de 
 """
 
 import re
-import json
-import argparse
 from pathlib import Path
 from typing import Optional
 
@@ -451,70 +449,3 @@ def parse_gift(content: str) -> dict:
 def parse_gift_file(filepath: str) -> dict:
     """Parse a GIFT file."""
     return get_parser().parse_file(filepath)
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='Parser para archivos GIFT de Moodle',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Ejemplos:
-  %(prog)s archivo.gift
-  %(prog)s archivo.gift --json
-  %(prog)s archivo.gift --json --summary
-        """
-    )
-    
-    parser.add_argument('filepath', nargs='?', help='Archivo GIFT a parsear')
-    parser.add_argument('-j', '--json', action='store_true', help='Salida en formato JSON')
-    parser.add_argument('-s', '--summary', action='store_true', help='Mostrar solo resumen')
-    
-    args = parser.parse_args()
-    
-    if not args.filepath:
-        parser.print_help()
-        return 1
-    
-    # Verificar si es un directorio
-    filepath = Path(args.filepath)
-    if filepath.is_dir():
-        print(f"❌ Error: '{args.filepath}' es un directorio")
-        print(f"   Para analizar directorios usa: gift-verify {args.filepath}")
-        return 1
-    
-    result = parse_gift_file(args.filepath)
-    
-    if args.json:
-        if args.summary and result["success"]:
-            summaries = [get_question_summary(q) for q in result["questions"]]
-            output = {
-                "success": True,
-                "filepath": result["filepath"],
-                "questionCount": result["questionCount"],
-                "questions": summaries
-            }
-            print(json.dumps(output, indent=2, ensure_ascii=False))
-        else:
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-    else:
-        if result["success"]:
-            print(f"✅ Archivo parseado correctamente: {args.filepath}")
-            print(f"   Total de preguntas: {result['questionCount']}")
-            print()
-            
-            for idx, q in enumerate(result["questions"], 1):
-                summary = get_question_summary(q)
-                title = summary["title"] or "<sin título>"
-                print(f"   {idx}. [{summary['type']}] {title}")
-                if summary["tags"]:
-                    print(f"      Tags: {', '.join(summary['tags'])}")
-        else:
-            print(f"❌ Error parseando archivo: {args.filepath}")
-            print(f"   {result['error']['message']}")
-            return 1
-    
-    return 0
-
-
-if __name__ == '__main__':
-    exit(main())

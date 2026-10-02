@@ -1,6 +1,5 @@
 from questions.core.moodle_health import (
     verificar_porcentajes_opciones,
-    estandarizar_nombre_pregunta,
     auditar_retroalimentaciones,
     limpiar_html_y_estilos_obsoletos,
     auditar_enlaces_y_multimedia,
@@ -18,11 +17,6 @@ def test_verificar_porcentajes_opciones():
     res2 = verificar_porcentajes_opciones(gift_invalido)
     assert res2["ok"] is False
     assert len(res2["preguntas_inconsistentes"]) == 1
-
-
-def test_estandarizar_nombre_pregunta():
-    res = estandarizar_nombre_pregunta("Pregunta Simple", materia="P1", tema="Punteros", bloom="B3")
-    assert res == "[P1][Punteros][B3] Pregunta Simple"
 
 
 def test_auditar_retroalimentaciones():

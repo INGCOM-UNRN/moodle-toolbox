@@ -4,8 +4,6 @@ Herramienta para verificar recursivamente un directorio de preguntas GIFT y Mood
 Genera un informe detallado con estadísticas, problemas detectados y recomendaciones.
 """
 
-import argparse
-import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -232,89 +230,3 @@ class GiftAnalyzer(SimilitudMixin, InformeMixin):
             self.analyze_file(filepath)
         
         self.find_duplicates()
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='Verifica recursivamente un directorio de preguntas GIFT y Moodle XML',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Ejemplos:
-  %(prog)s preguntas/
-  %(prog)s preguntas/ -o informe.txt
-  %(prog)s preguntas/ --no-recursive -v
-  %(prog)s preguntas/ -s 0.9 --json
-        """
-    )
-    
-    parser.add_argument('directory', nargs='?', help='Directorio a analizar')
-    parser.add_argument('-o', '--output', help='Archivo de salida para el informe')
-    parser.add_argument('-r', '--no-recursive', action='store_true',
-                        help='No buscar recursivamente en subdirectorios')
-    parser.add_argument('-v', '--verbose', action='store_true',
-                        help='Mostrar información detallada durante el análisis')
-    parser.add_argument('-s', '--similarity', type=float, default=0.85,
-                        help='Threshold de similitud para duplicados (0.0-1.0, default: 0.85)')
-    parser.add_argument('-j', '--json', action='store_true', help='Salida en formato JSON')
-    
-    args = parser.parse_args()
-    
-    if not args.directory:
-        parser.print_help()
-        return 1
-    
-    directory = Path(args.directory)
-    
-    if not directory.is_dir():
-        print(f"❌ Error: '{args.directory}' no es un directorio válido")
-        return 1
-    
-    if not 0.0 <= args.similarity <= 1.0:
-        print("❌ Error: El threshold debe estar entre 0.0 y 1.0")
-        return 1
-    
-    if not args.json:
-        print(f"Analizando directorio: {args.directory}")
-        print(f"Modo recursivo: {'No' if args.no_recursive else 'Sí'}")
-        print(f"Threshold de similitud: {args.similarity}")
-        print("=" * 80)
-        print()
-    
-    analyzer = GiftAnalyzer(
-        similarity_threshold=args.similarity,
-        recursive=not args.no_recursive,
-        verbose=args.verbose
-    )
-    
-    try:
-        analyzer.scan_directory(args.directory)
-        
-        if not args.json:
-            print()
-            print("Generando informe...")
-            print()
-        
-        if args.json:
-            print(json.dumps(analyzer.to_json(), indent=2, ensure_ascii=False))
-        else:
-            report = analyzer.generate_report(args.output)
-            if not args.output:
-                print(report)
-            else:
-                print(report)
-    
-    except KeyboardInterrupt:
-        print("\n⚠️  Análisis interrumpido por el usuario")
-        return 1
-    except Exception as e:
-        print(f"❌ Error inesperado: {e}")
-        if args.verbose:
-            import traceback
-            traceback.print_exc()
-        return 1
-    
-    return 0
-
-
-if __name__ == '__main__':
-    exit(main())
