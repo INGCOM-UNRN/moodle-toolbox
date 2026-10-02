@@ -23,3 +23,9 @@ def test_analyzer_duplicates(tmp_path):
     analyzer.find_duplicates()
     
     assert len(analyzer.duplicates) == 1
+
+
+def test_alias_gift_analyzer():
+    from questions.core.validator import AnalizadorBanco
+
+    assert GiftAnalyzer is AnalizadorBanco

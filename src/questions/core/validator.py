@@ -35,8 +35,8 @@ class GiftStats:
     files_by_depth: Counter = field(default_factory=Counter)
 
 
-class GiftAnalyzer(SimilitudMixin, InformeMixin):
-    """Analyzer for question directories (GIFT and Moodle XML)."""
+class AnalizadorBanco(SimilitudMixin, InformeMixin):
+    """Analizador de un banco de preguntas (GIFT y Moodle XML): validez, estadísticas y similitud."""
     
     def __init__(self, similarity_threshold: float = 0.85, recursive: bool = True, verbose: bool = False,
                  extensions: tuple = EXTENSIONES):
@@ -230,3 +230,7 @@ class GiftAnalyzer(SimilitudMixin, InformeMixin):
             self.analyze_file(filepath)
         
         self.find_duplicates()
+
+
+# Nombre anterior (analiza GIFT y Moodle XML); se conserva por compatibilidad.
+GiftAnalyzer = AnalizadorBanco

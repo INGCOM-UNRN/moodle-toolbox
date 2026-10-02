@@ -4,7 +4,7 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.core.validator import GiftAnalyzer
+from questions.core.validator import AnalizadorBanco
 
 import contextlib
 import io
@@ -33,7 +33,7 @@ def stats(
     if not paths:
         paths = ['.']
         
-    analyzer = GiftAnalyzer(recursive=recursive)
+    analyzer = AnalizadorBanco(recursive=recursive)
     with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
         for p in paths:
             path_obj = Path(p)
@@ -66,7 +66,7 @@ def similar(
     if not paths:
         paths = ['.']
         
-    analyzer = GiftAnalyzer(similarity_threshold=similarity, recursive=recursive)
+    analyzer = AnalizadorBanco(similarity_threshold=similarity, recursive=recursive)
     with contextlib.redirect_stdout(io.StringIO()) if output_json else contextlib.nullcontext():
         for p in paths:
             path_obj = Path(p)

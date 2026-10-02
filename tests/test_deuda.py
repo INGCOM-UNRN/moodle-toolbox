@@ -163,9 +163,9 @@ def test_html_a_markdown_cambia_solo_los_campos_convertidos():
 
 def test_similitud_detecta_identicas_en_un_conjunto_chico():
     """Con el IDF sin suavizar, dos preguntas idénticas entre tres daban coseno 0."""
-    from questions.core.validator import GiftAnalyzer
+    from questions.core.validator import AnalizadorBanco
 
-    analizador = GiftAnalyzer(similarity_threshold=0.9)
+    analizador = AnalizadorBanco(similarity_threshold=0.9)
     texto = "Punteros qué guarda un puntero en lenguaje C una dirección un entero nada"
     analizador.all_questions = [{"full_text": texto}, {"full_text": texto}, {"full_text": "otra cosa distinta sí"}]
     analizador.find_duplicates()

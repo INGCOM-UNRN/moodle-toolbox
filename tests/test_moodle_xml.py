@@ -11,7 +11,7 @@ from questions.core.banco import buscar_archivos, parse_archivo
 from questions.core.converter import gift_to_xml
 from questions.core.moodle_xml import parse_xml
 from questions.core.parser import parse_gift
-from questions.core.validator import GiftAnalyzer
+from questions.core.validator import AnalizadorBanco
 
 runner = CliRunner()
 
@@ -107,7 +107,7 @@ def test_analizador_cuenta_por_formato_y_detecta_duplicados_entre_formatos(tmp_p
     gift = "::Punteros:: ¿Qué guarda un puntero en C? {=Una dirección de memoria ~Un valor entero ~Un carácter}\n"
     (tmp_path / "a.gift").write_text(gift, encoding="utf-8")
     (tmp_path / "b.xml").write_text(gift_to_xml(gift), encoding="utf-8")
-    analizador = GiftAnalyzer(similarity_threshold=0.85)
+    analizador = AnalizadorBanco(similarity_threshold=0.85)
     analizador.scan_directory(str(tmp_path))
     assert dict(analizador.stats.by_format) == {"gift": 1, "xml": 1}
     assert analizador.stats.total_questions == 2
@@ -122,7 +122,7 @@ def test_filtrado_por_prefijos_igual_a_fuerza_bruta():
     random.seed(7)
     vocab = [f"w{i}" for i in range(40)]
     for umbral in (0.5, 0.7, 0.85, 0.95):
-        analizador = GiftAnalyzer(similarity_threshold=umbral)
+        analizador = AnalizadorBanco(similarity_threshold=umbral)
         textos = []
         for _ in range(12):
             base = random.sample(vocab, random.randint(0, 10))

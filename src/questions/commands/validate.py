@@ -6,7 +6,7 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.core.validator import GiftAnalyzer
+from questions.core.validator import AnalizadorBanco
 from questions.core.banco import parse_archivo
 
 from questions.commands.common import LLM_OPTION, fail
@@ -32,7 +32,7 @@ def validate(
         paths = ['.']
         
     all_results = []
-    analyzer = GiftAnalyzer(
+    analyzer = AnalizadorBanco(
         similarity_threshold=similarity,
         recursive=recursive,
         verbose=verbose

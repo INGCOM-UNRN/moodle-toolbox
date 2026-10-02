@@ -31,7 +31,7 @@ from questions.core.lector import Archivo, Unidad
 from questions.core.codigo import transformar_codigo
 from questions.core.gift_model import Question
 from questions.core.tree import serializar_quiz
-from questions.core.validator import GiftAnalyzer
+from questions.core.validator import AnalizadorBanco
 
 CRITERIOS = ("completa", "primera")
 
@@ -78,7 +78,7 @@ def completitud(q: Question) -> tuple:
 
 def agrupar(unidades: List[Unidad], umbral: float, criterio: str = "completa") -> List[Grupo]:
     """Grupos de duplicados: una pregunta conservada y las que se eliminan por ser similares a ella."""
-    analizador = GiftAnalyzer(similarity_threshold=umbral)
+    analizador = AnalizadorBanco(similarity_threshold=umbral)
     analizador.all_questions = [{"full_text": _texto_completo(u.pregunta)} for u in unidades]
     analizador.find_duplicates()
 
