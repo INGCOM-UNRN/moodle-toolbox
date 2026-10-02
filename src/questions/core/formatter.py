@@ -1,18 +1,121 @@
+"""Formato estándar de bancos GIFT y Moodle XML, y transformación del código.
+
+GIFT: comentarios, `::Título::`, enunciado, `{` y `}` en líneas propias y una opción
+por línea con 4 espacios de sangría. Moodle XML: sangría de 2 espacios y todo `<text>`
+con contenido en CDATA. En ambos, `correct_first` ordena las opciones de opción
+múltiple por porcentaje (la correcta primero). La transformación del código
+(fullwidth y marcas `·`/`↵`) vive en `questions.core.codigo`.
+"""
+
 import re
-from pathlib import Path
+import xml.etree.ElementTree as ET
+
+from questions.core.codigo import transformar_archivo, transformar_codigo
+from questions.core.gift_semantics import _extraer_ultimo_grupo_llaves, _llaves_balanceadas
+
+
+# ---------------------------------------------------------------------------
+# GIFT
+# ---------------------------------------------------------------------------
+
+def _bloques_gift(content: str) -> list[str]:
+    """Separa las preguntas como el parser: una línea en blanco corta sólo con las llaves
+    balanceadas (el código con líneas en blanco queda dentro de su pregunta)."""
+    bloques, actual = [], []
+    for linea in content.split("\n"):
+        if not linea.strip():
+            if actual and _llaves_balanceadas("\n".join(actual)):
+                bloques.append("\n".join(actual))
+                actual = []
+            elif actual:
+                actual.append("")
+            continue
+        actual.append(linea)
+    if actual:
+        bloques.append("\n".join(actual))
+    return bloques
+
+
+def _codigo_abierto(texto: str) -> bool:
+    """True si el texto deja abierto un bloque ``` o un código en línea `...`."""
+    if texto.count("```") % 2:
+        return True
+    return texto.replace("```", "").count("`") % 2 == 1
+
+
+def _peso_opcion(opcion: str) -> float:
+    """Porcentaje de una línea de opción GIFT: `=` 100, `~` 0, `~%n%` / `=%n%` n."""
+    m = re.match(r"^([=~])\s*%(-?\d+(?:\.\d+)?)%", opcion)
+    if m:
+        return float(m.group(2))
+    return 100.0 if opcion.startswith("=") else 0.0
+
+
+def _partir_opciones(opcion: str) -> list[str]:
+    """Separa opciones escritas en la misma línea (`=a ~b ####fb`) donde el parser las
+    separa: en cada `=` o `~` y en el `####` de la retroalimentación general, sin
+    escapar y fuera del código."""
+    partes, inicio, en_codigo, i = [], 0, False, 0
+    while i < len(opcion):
+        c = opcion[i]
+        if c == "\\":
+            i += 2
+            continue
+        if opcion.startswith("```", i):
+            en_codigo = not en_codigo
+            i += 3
+            continue
+        if c == "`":
+            en_codigo = not en_codigo
+        elif opcion.startswith("####", i) and i > 0 and not en_codigo:
+            partes.append(opcion[inicio:i].rstrip())
+            inicio = i
+            i += 4
+            continue
+        elif c in "=~" and i > 0 and not en_codigo and not opcion.startswith("####", inicio):
+            partes.append(opcion[inicio:i].rstrip())
+            inicio = i
+        i += 1
+    partes.append(opcion[inicio:])
+    return [p for p in partes if p.strip()]
+
+
+def _opciones_gift(answers_block: str) -> list[str]:
+    """Una entrada por opción; las líneas de continuación se unen a su opción.
+
+    El código dentro de una opción conserva sus saltos de línea y su sangría.
+    """
+    opciones: list[str] = []
+    actual = ""
+    for cruda in answers_block.splitlines():
+        if actual and _codigo_abierto(actual):
+            actual += "\n" + cruda.rstrip()
+            continue
+        linea = cruda.strip()
+        if not linea:
+            continue
+        if linea[0] in ('=', '~', '#', '{'):
+            if actual:
+                opciones.append(actual)
+            actual = linea
+        elif actual:
+            actual += " " + linea
+        else:
+            actual = linea
+    if actual:
+        opciones.append(actual)
+    if answers_block.startswith("#") or "->" in answers_block:
+        return opciones  # numérica y emparejamiento conservan su disposición
+    return [parte for opcion in opciones for parte in _partir_opciones(opcion)]
+
 
 def format_gift_content(content: str, correct_first: bool = False) -> str:
     """
     Formatea el contenido de un archivo GIFT según las reglas estandarizadas.
     """
-    # Dividimos por preguntas (basado en líneas en blanco dobles)
-    questions = re.split(r'\n\s*\n', content.strip())
     formatted_questions = []
-    
-    for q in questions:
-        if not q.strip():
-            continue
-            
+
+    for q in _bloques_gift(content.strip()):
         # Extraer comentarios iniciales
         comments = []
         q_lines = q.splitlines()
@@ -25,228 +128,152 @@ def format_gift_content(content: str, correct_first: bool = False) -> str:
                 content_start_idx += 1
             else:
                 break
-        
+
         remaining_content = "\n".join(q_lines[content_start_idx:]).strip()
-        
+
         # Extraer título
         title = ""
         title_match = re.match(r'^::(.*?)::(.*)', remaining_content, re.DOTALL)
         if title_match:
             title = f"::{title_match.group(1).strip()}::"
             remaining_content = title_match.group(2).strip()
-            
-        # Encontrar el bloque de respuestas { ... }
-        brace_start = -1
-        for i in range(len(remaining_content)):
-            if remaining_content[i] == '{' and (i == 0 or remaining_content[i-1] != '\\'):
-                brace_start = i
-                break
-        
-        if brace_start == -1:
-            stem = remaining_content.strip()
-            answers_block = ""
-            post_stem = ""
-        else:
-            stem = remaining_content[:brace_start].strip()
-            brace_end = -1
-            for i in range(len(remaining_content) - 1, brace_start, -1):
-                if remaining_content[i] == '}' and (i == 0 or remaining_content[i-1] != '\\'):
-                    brace_end = i
-                    break
-            
-            if brace_end == -1:
-                answers_block = remaining_content[brace_start+1:].strip()
-                post_stem = ""
-            else:
-                answers_block = remaining_content[brace_start+1:brace_end].strip()
-                post_stem = remaining_content[brace_end+1:].strip()
 
-        # Formatear la pregunta
-        parts = []
-        if comments:
-            parts.extend(comments)
-        
+        # El bloque de respuestas es el ÚLTIMO grupo de llaves balanceado: el código
+        # del enunciado puede tener llaves propias.
+        grupo = _extraer_ultimo_grupo_llaves(remaining_content)
+        if grupo is None:
+            stem, answers_block = remaining_content, None
+        else:
+            stem, answers_block = grupo[0].strip(), grupo[1].strip()
+            fuera_de_codigo = re.sub(r"```.*?```|`[^`]*`", "", stem, flags=re.DOTALL)
+            if re.search(r"(?<!\\)\{", fuera_de_codigo):
+                # Cloze (respuestas embebidas en el enunciado): se deja como está.
+                stem, answers_block = remaining_content, None
+
+        parts = list(comments)
         if title:
             parts.append(title)
-            
         if stem:
             parts.append(stem)
-            
-        if brace_start != -1:
-            parts.append("{")
-            ans_lines = []
-            raw_answers = answers_block.splitlines()
-            current_ans = ""
-            for line in raw_answers:
-                line = line.strip()
-                if not line: continue
-                
-                if line[0] in ('=', '~', '#', '{') or (line.startswith('####')):
-                    if current_ans:
-                        ans_lines.append(current_ans)
-                    current_ans = line
-                else:
-                    if current_ans:
-                        current_ans += " " + line
-                    else:
-                        current_ans = line
-            
-            if current_ans:
-                ans_lines.append(current_ans)
-            
-            # Reordenar si correct_first es True (solo para MC)
-            if correct_first:
-                correct = [a for a in ans_lines if a.startswith('=')]
-                incorrect = [a for a in ans_lines if a.startswith('~')]
-                others = [a for a in ans_lines if not a.startswith('=') and not a.startswith('~')]
-                
-                # Solo reordenar si parece una pregunta MC estándar
-                if correct and incorrect:
-                    ans_lines = correct + incorrect + others
 
-            # Aplicar indentación final
-            ans_lines = ["    " + a for a in ans_lines]
-                
-            parts.extend(ans_lines)
+        if answers_block is not None:
+            ans_lines = _opciones_gift(answers_block)
+
+            # Reordenar si correct_first es True (solo para MC): por porcentaje, de
+            # mayor a menor; la retroalimentación general (####) queda al final.
+            if correct_first:
+                # La retroalimentación escrita en su propia línea (`#...`) viaja con su opción.
+                unidades: list[list[str]] = []
+                for a in ans_lines:
+                    if a.startswith("#") and not a.startswith("####") and unidades and unidades[-1][0][0] in "=~":
+                        unidades[-1].append(a)
+                    else:
+                        unidades.append([a])
+                opciones = [u for u in unidades if u[0][0] in "=~"]
+                otras = [u for u in unidades if u[0][0] not in "=~"]
+                pesos = [_peso_opcion(u[0]) for u in opciones]
+                if any(p > 0 for p in pesos) and any(p <= 0 for p in pesos):
+                    ordenadas = sorted(opciones, key=lambda u: _peso_opcion(u[0]), reverse=True)
+                    ans_lines = [linea for u in ordenadas + otras for linea in u]
+
+            parts.append("{")
+            parts.extend("    " + a for a in ans_lines)
             parts.append("}")
-        
-        if post_stem:
-            parts.append(post_stem)
-            
+
         formatted_questions.append("\n".join(parts))
-        
+
     return "\n\n".join(formatted_questions) + "\n"
 
 
-def fix_code_indentation(content: str) -> tuple[str, int]:
+# ---------------------------------------------------------------------------
+# Moodle XML
+# ---------------------------------------------------------------------------
+
+_CD_ABRE = "\ue000"
+_CD_CIERRA = "\ue001"
+
+
+def _desescapar_marcado(m: re.Match) -> str:
+    texto = m.group(1).replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+    return "<![CDATA[" + texto.replace("]]>", "]]]]><![CDATA[>") + "]]>"
+
+
+def format_xml_content(content: str, correct_first: bool = False) -> str:
+    """Formatea un archivo Moodle XML: sangría de 2 espacios y `<text>` en CDATA.
+
+    Conserva los comentarios. Con `correct_first`, en las preguntas de opción múltiple
+    las respuestas quedan ordenadas por fracción (la correcta primero).
     """
-    Reemplaza 4 espacios de indentación por '····' dentro de bloques de código.
+    parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+    raiz = ET.fromstring(content, parser=parser)
+
+    if correct_first:
+        for pregunta in raiz.iter("question"):
+            if pregunta.get("type") != "multichoice":
+                continue
+            respuestas = pregunta.findall("answer")
+            if len(respuestas) < 2:
+                continue
+            posicion = list(pregunta).index(respuestas[0])
+            for r in respuestas:
+                pregunta.remove(r)
+
+            def fraccion(r):
+                try:
+                    return float(r.get("fraction", "0"))
+                except ValueError:
+                    return 0.0
+
+            for i, r in enumerate(sorted(respuestas, key=fraccion, reverse=True)):
+                pregunta.insert(posicion + i, r)
+
+    for texto in raiz.iter("text"):
+        if texto.text and texto.text.strip():
+            texto.text = _CD_ABRE + texto.text + _CD_CIERRA
+
+    ET.indent(raiz, space="  ")
+    # `<text></text>` como en las exportaciones de Moodle 4 (no `<text />`).
+    xml = ET.tostring(raiz, encoding="unicode", short_empty_elements=False)
+    xml = re.sub(f"{_CD_ABRE}(.*?){_CD_CIERRA}", _desescapar_marcado, xml, flags=re.DOTALL)
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + xml + "\n"
+
+
+def format_content(content: str, formato: str, correct_first: bool = False) -> str:
+    """Formatea un archivo según su formato ('gift' o 'xml')."""
+    if formato == "xml":
+        return format_xml_content(content, correct_first=correct_first)
+    return format_gift_content(content, correct_first=correct_first)
+
+
+# ---------------------------------------------------------------------------
+# Código (compatibilidad: la lógica está en questions.core.codigo)
+# ---------------------------------------------------------------------------
+
+def fix_code_indentation(content: str, formato: str = "md") -> tuple[str, int]:
     """
-    lines = content.split('\n')
-    result_lines = []
-    in_code_block = False
-    total_replacements = 0
-    
-    for line in lines:
-        if line.strip().startswith('```'):
-            in_code_block = not in_code_block
-            result_lines.append(line)
-            continue
-        
-        if in_code_block:
-            original_line = line
-            new_line = ""
-            i = 0
-            while i + 4 <= len(line) and line[i:i+4] == "    ":
-                new_line += "····"
-                i += 4
-                total_replacements += 1
-            new_line += line[i:]
-            result_lines.append(new_line)
-        else:
-            result_lines.append(line)
-            
-    return '\n'.join(result_lines), total_replacements
-
-
-SPECIAL_CHARS_TO_NORMAL = {
-    "⩵": "==",
-    "＝": "=",
-    ";": ";",
-    "＃": "#",
-    "｛": "{",
-    "｝": "}",
-    " ": " ",
-    "↵": "\n",
-    "    ": "\t",
-    "＞": ">",
-    "＜": "<",
-    "［": "[",
-    "］": "]",
-    " ": " ",
-    "（": "(",
-    "）": ")",
-    "＊": "*",
-    "＂": '"',
-    "：": ":",
-}
-
-XML_ENTITIES_TO_FULLWIDTH = {
-    "&lt;": "＜",
-    "&gt;": "＞",
-    "&amp;": "＆",
-    "&quot;": "＂",
-    "&apos;": "＇",
-    "&#39;": "＇",
-    "&#34;": "＂",
-    "&#60;": "＜",
-    "&#62;": "＞",
-    "&#38;": "＆",
-    "&nbsp;": "　",
-}
-
-NORMAL_TO_SPECIAL_CHARS = {v: k for k, v in SPECIAL_CHARS_TO_NORMAL.items() if v != "\n" and v != "\t"}
-FULLWIDTH_TO_XML_ENTITIES = {v: k for k, v in XML_ENTITIES_TO_FULLWIDTH.items()}
+    Marca la indentación del código con '·' (un punto por espacio) dentro de las
+    secciones de código. Devuelve el contenido y la cantidad de secciones modificadas.
+    """
+    return transformar_archivo(content, formato, fullwidth=None, espacios=True, saltos=False)
 
 
 def convert_code_block_content(content: str, to_normal: bool = True) -> str:
     """
     Convierte el contenido de un bloque de código entre normal y fullwidth.
     """
-    if to_normal:
-        for fullwidth, normal in SPECIAL_CHARS_TO_NORMAL.items():
-            content = content.replace(fullwidth, normal)
-        for fullwidth, entity in FULLWIDTH_TO_XML_ENTITIES.items():
-            if fullwidth not in SPECIAL_CHARS_TO_NORMAL:
-                content = content.replace(fullwidth, entity)
-    else:
-        for entity, fullwidth in XML_ENTITIES_TO_FULLWIDTH.items():
-            content = content.replace(entity, fullwidth)
-        for normal, fullwidth in NORMAL_TO_SPECIAL_CHARS.items():
-            content = content.replace(normal, fullwidth)
-    return content
+    texto, _ = transformar_codigo(f"```\n{content}```", fullwidth=not to_normal, espacios=False, saltos=False)
+    return texto[4:-3]
 
 
 def convert_markdown_code_blocks(text: str, to_normal: bool = True) -> tuple[str, int]:
     """
     Convierte caracteres especiales en bloques de código markdown.
     """
-    blocks_modified = 0
-    
-    def replace_code_block(match):
-        nonlocal blocks_modified
-        lang = match.group(1) or ''
-        content = match.group(2)
-        converted = convert_code_block_content(content, to_normal)
-        if converted != content:
-            blocks_modified += 1
-        return f"```{lang}\n{converted}\n```"
-    
-    text = re.sub(r'```([a-z]*)\n(.*?)```', replace_code_block, text, flags=re.DOTALL)
-    
-    def replace_inline_code(match):
-        nonlocal blocks_modified
-        content = match.group(1)
-        converted = convert_code_block_content(content, to_normal)
-        if converted != content:
-            blocks_modified += 1
-        return f"`{converted}`"
-    
-    text = re.sub(r'`([^`\n]+)`', replace_inline_code, text)
-    return text, blocks_modified
+    return transformar_codigo(text, fullwidth=not to_normal, espacios=False, saltos=False)
 
 
 def process_xml_cdata(text: str, to_normal: bool = True) -> tuple[str, int]:
     """
-    Procesa secciones CDATA en archivos XML.
+    Convierte caracteres especiales en el código de los <text> de un archivo XML.
     """
-    total_blocks = 0
-    def replace_cdata(match):
-        nonlocal total_blocks
-        cdata_content = match.group(1)
-        converted_content, blocks = convert_markdown_code_blocks(cdata_content, to_normal)
-        total_blocks += blocks
-        return f"<![CDATA[{converted_content}]]>"
-    
-    text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', replace_cdata, text, flags=re.DOTALL)
-    return text, total_blocks
+    return transformar_archivo(text, "xml", fullwidth=not to_normal, espacios=False, saltos=False)

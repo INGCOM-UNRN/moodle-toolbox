@@ -4,9 +4,11 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.core.formatter import format_gift_content, fix_code_indentation, convert_markdown_code_blocks, process_xml_cdata
+from questions.core.banco import expandir_rutas, formato_de
+from questions.core.codigo import transformar_archivo
+from questions.core.formatter import format_content
 
-from questions.commands.common import LLM_OPTION
+from questions.commands.common import LLM_OPTION, fail
 
 
 def format_cmd(
@@ -14,56 +16,54 @@ def format_cmd(
     llm: bool = LLM_OPTION,
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
     dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
-    code: bool = typer.Option(False, "--code", help="Ajustar indentación en bloques de código (```)"),
-    fullwidth: bool = typer.Option(False, "--fullwidth", help="Convertir caracteres de código a fullwidth"),
-    normal: bool = typer.Option(False, "--normal", help="Convertir caracteres de código a normal (default)"),
-    correct_first: bool = typer.Option(False, "--correct-first", help="Mueve la respuesta correcta al principio (solo MC)."),
+    code: bool = typer.Option(False, "--code", help="Marcar la indentación del código con · (un punto por espacio)"),
+    fullwidth: bool = typer.Option(
+        False, "--fullwidth",
+        help="Proteger el código: símbolos fullwidth y marcas · (indentación) y ↵ (fin de línea)",
+    ),
+    normal: bool = typer.Option(False, "--normal", help="Restaurar el código a caracteres normales (sin marcas)"),
+    marcas: bool = typer.Option(
+        True, "--marcas/--sin-marcas", help="Con --fullwidth, agregar las marcas · y ↵ (por defecto, sí)."
+    ),
+    correct_first: bool = typer.Option(
+        False, "--correct-first", help="Ordena las opciones de opción múltiple por porcentaje (la correcta primero)."
+    ),
 ):
-    """Formatea archivos GIFT y ajusta bloques de código."""
+    """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵)."""
+    if fullwidth and normal:
+        fail("--fullwidth y --normal son excluyentes.")
     if not paths:
-        paths = ['.']
-        
-    files = []
-    for p in paths:
-        path = Path(p)
-        if path.is_file():
-            files.append(path)
-        elif path.is_dir():
-            pattern = "**/*.gift" if recursive else "*.gift"
-            files.extend(list(path.glob(pattern)))
-            if code or fullwidth or normal:
-                pattern_md = "**/*.md" if recursive else "*.md"
-                files.extend(list(path.glob(pattern_md)))
-                pattern_xml = "**/*.xml" if recursive else "*.xml"
-                files.extend(list(path.glob(pattern_xml)))
+        paths = [Path('.')]
+
+    transforma_codigo = code or fullwidth or normal
+    extensiones = (".gift", ".xml", ".md") if transforma_codigo else (".gift", ".xml")
+    files = expandir_rutas(paths, recursive, extensiones)
 
     if not files:
         click.echo("No se encontraron archivos para procesar.")
         return
 
-    to_normal = not fullwidth
     modified_count = 0
-    
+
     for f in sorted(files):
         try:
             content = f.read_text(encoding='utf-8')
+            formato = formato_de(f) or "md"
             modified = content
-            
-            # 1. Formateo GIFT (solo para archivos .gift)
-            if f.suffix == '.gift':
-                modified = format_gift_content(modified, correct_first=correct_first)
-            
-            # 2. Fix indentación código (opcional)
+
+            # 1. Código: fullwidth/normal y marcas (antes del formato: en GIFT, el código
+            #    protegido ya no confunde la detección del bloque de respuestas).
+            if fullwidth:
+                modified, _ = transformar_archivo(modified, formato, fullwidth=True, espacios=marcas, saltos=marcas)
+            elif normal:
+                modified, _ = transformar_archivo(modified, formato, fullwidth=False)
             if code:
-                modified, _ = fix_code_indentation(modified)
-            
-            # 3. Conversión de caracteres (opcional)
-            if fullwidth or normal:
-                if f.suffix == '.xml':
-                    modified, _ = process_xml_cdata(modified, to_normal)
-                else:
-                    modified, _ = convert_markdown_code_blocks(modified, to_normal)
-            
+                modified, _ = transformar_archivo(modified, formato, fullwidth=None, espacios=True, saltos=False)
+
+            # 2. Formato estándar (GIFT y XML)
+            if formato in ("gift", "xml"):
+                modified = format_content(modified, formato, correct_first=correct_first)
+
             if content != modified:
                 if not dry_run:
                     f.write_text(modified, encoding='utf-8')
