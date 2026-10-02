@@ -1,3 +1,4 @@
+import difflib
 from pathlib import Path
 from typing import List, Optional
 
@@ -28,8 +29,16 @@ def format_cmd(
     correct_first: bool = typer.Option(
         False, "--correct-first", help="Ordena las opciones de opción múltiple por porcentaje (la correcta primero)."
     ),
+    check: bool = typer.Option(
+        False, "--check", help="No escribir: salir con código 1 si algún archivo cambiaría (para CI y pre-commit)."
+    ),
+    diff: bool = typer.Option(False, "--diff", help="No escribir: mostrar los cambios como diff unificado."),
 ):
-    """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵)."""
+    """Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵).
+
+    Con --check o --diff no escribe nada; --check sale con código 1 si algún archivo
+    cambiaría (también si algún archivo no se pudo procesar).
+    """
     if fullwidth and normal:
         fail("--fullwidth y --normal son excluyentes.")
     if not paths:
@@ -44,6 +53,7 @@ def format_cmd(
         return
 
     modified_count = 0
+    errores = 0
 
     for f in sorted(files):
         try:
@@ -65,12 +75,29 @@ def format_cmd(
                 modified = format_content(modified, formato, correct_first=correct_first)
 
             if content != modified:
-                if not dry_run:
-                    f.write_text(modified, encoding='utf-8')
-                status = "[SIMULACIÓN]" if dry_run else "[MODIFICADO]"
-                click.echo(f"{status} {f}")
+                if diff:
+                    click.echo("".join(difflib.unified_diff(
+                        content.splitlines(keepends=True), modified.splitlines(keepends=True),
+                        fromfile=f"a/{f}", tofile=f"b/{f}")), nl=False)
+                elif check:
+                    click.echo(f"[CAMBIARÍA] {f}")
+                else:
+                    if not dry_run:
+                        f.write_text(modified, encoding='utf-8')
+                    status = "[SIMULACIÓN]" if dry_run else "[MODIFICADO]"
+                    click.echo(f"{status} {f}")
                 modified_count += 1
         except Exception as e:
+            errores += 1
             click.echo(f"Error procesando {f}: {e}", err=True)
 
+    if diff:
+        return
+    if check:
+        if modified_count or errores:
+            click.echo(f"\n{modified_count} de {len(files)} archivos no tienen el formato estándar "
+                       "(`questions format` los corrige).", err=True)
+            raise typer.Exit(code=1)
+        click.echo(f"{len(files)} archivos con el formato estándar.")
+        return
     click.echo(f"\nResumen: {len(files)} archivos procesados, {modified_count} modificados.")
