@@ -297,8 +297,9 @@ class GiftParser:
         
         # Parse choices
         # Pattern: [=~] optional_weight text optional_feedback
+        # Los escapes (\\= \\~ \\#) se consumen como una unidad: no cortan la opción.
         choice_pattern = re.compile(
-            r'([=~])\s*(%[+-]?\d+(?:\.\d+)?%)?\s*([^=~#]*?)(?:#([^=~]*))?(?=[=~]|$)',
+            r'(?<!\\)([=~])\s*(%[+-]?\d+(?:\.\d+)?%)?\s*((?:\\.|[^=~#\\])*?)(?:#((?:\\.|[^=~\\])*))?(?=[=~]|$)',
             re.DOTALL
         )
         
