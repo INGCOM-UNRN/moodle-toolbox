@@ -19,6 +19,7 @@ class QuestionType(Enum):
     MATCHING = "Matching"
     NUMERICAL = "Numerical"
     ESSAY = "Essay"
+    CLOZE = "Cloze"  # sólo desde Moodle XML (cloze / multianswer)
 
 
 @dataclass
