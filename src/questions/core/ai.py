@@ -1,18 +1,49 @@
-#!/usr/bin/env python3
+"""Procesamiento de preguntas con un LLM (Gemini) sobre GIFT y Moodle XML.
+
+El modelo siempre recibe GIFT compacto, el formato más corto para una pregunta y el
+que los LLM conocen mejor:
+
+- GIFT: el bloque de la pregunta sin comentarios (`// [tag:…]`, `[id:…]`) ni
+  `$CATEGORY`, que se conservan aparte y se vuelven a poner al escribir.
+- Moodle XML: la pregunta pasa por el modelo unificado y se serializa a GIFT; la
+  respuesta se aplica sobre el `<question>` original, que conserva todo lo que GIFT no
+  representa (penalización, numeración, tags, idnumber, formatos…).
+- Código: se envía en ASCII normal y sin las marcas `·` y `↵` (los símbolos fullwidth
+  ocupan 3 bytes y cortan los tokens; además el modelo razona mejor sobre código
+  normal). La respuesta se vuelve a proteger antes de interpretarla y cada archivo
+  recupera la convención de su original.
+
+Las preguntas sin equivalente en GIFT (cloze y tipos de plugins) y las categorías no
+se envían. Si una respuesta del modelo no es una pregunta GIFT válida (o en `improve`
+cambia el tipo), se conserva el original.
+"""
 from __future__ import annotations
 
+import copy
 import os
 import re
-import argparse
-import sys
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Dict, List, Optional
+
 try:
     from google import genai
 except ImportError:
     genai = None
 
-from questions.core.config import get_api_key, get_model
+from questions.core.codigo import transformar_codigo, usa_convencion
+from questions.core.config import get_api_key, get_model  # noqa: F401 - get_model lo usa el comando
+from questions.core.converter import question_to_gift
+from questions.core.formatter import _bloques_gift, format_gift_content
+from questions.core.gift_model import Question
+from questions.core.moodle_xml import _pregunta as _pregunta_xml
+from questions.core.parser import GiftParser
+from questions.core.tree import serializar_quiz
+
+TIPOS_PROCESABLES = ("MC", "Short", "TF", "Matching", "Numerical", "Essay", "Description")
+VARIACIONES = 3
+
 
 def load_config():
     """Load configuration and return GenAI Client."""
@@ -26,246 +57,452 @@ def load_config():
         raise ValueError("❌ Error: GEMINI_API_KEY no encontrada. Usa 'questions config set-key <KEY>' para configurarla.")
     return genai.Client(api_key=api_key)
 
-def split_gift_questions(content: str) -> List[str]:
-    """Split GIFT content into individual questions based on blank lines."""
-    # Split by one or more blank lines
-    parts = re.split(r'\n\s*\n', content)
-    # Filter out empty parts
-    return [p.strip() for p in parts if p.strip()]
 
-def list_available_models(client: genai.Client) -> List[str]:
+def split_gift_questions(content: str) -> List[str]:
+    """Divide GIFT en preguntas como el parser (el código con líneas en blanco queda junto)."""
+    return [p.strip() for p in _bloques_gift(content) if p.strip()]
+
+
+def list_available_models(client) -> List[str]:
     """Lista los modelos generativos disponibles en Gemini."""
     try:
-        models = []
-        for model in client.models.list():
-            if 'generateContent' in model.supported_methods:
-                models.append(model.name)
-        return models
+        return [m.name for m in client.models.list() if 'generateContent' in m.supported_methods]
     except Exception as e:
         print(f"❌ Error al listar modelos: {e}")
         return []
 
-def process_batch(client: genai.Client, model_id: str, questions: List[str], mode: str, custom_prompt: Optional[str] = None) -> List[str]:
-    """Process a batch of questions with Gemini."""
-    if not questions:
-        return []
 
+# ---------------------------------------------------------------------------
+# Unidades: una pregunta a procesar y lo necesario para escribirla de vuelta
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Unidad:
+    archivo: Path
+    formato: str               # 'gift' o 'xml'
+    texto: str                 # GIFT compacto que recibe el modelo
+    tipo: str                  # tipo del modelo unificado
+    original: str = ""         # texto original (para medir el ahorro)
+    prefijo: List[str] = field(default_factory=list)  # comentarios GIFT
+    elemento: Optional[ET.Element] = None             # <question> original (XML)
+    fullwidth: bool = True     # el código original usaba símbolos fullwidth
+    marcas: bool = False       # el código original usaba marcas · / ↵
+    forma: tuple = ()          # ver _forma
+    procesado: List[Question] = field(default_factory=list)
+    procesado_gift: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Archivo:
+    ruta: Path
+    formato: str
+    segmentos: list            # GIFT: str (texto que no se procesa) o Unidad
+    raiz: Optional[ET.Element] = None  # XML
+
+
+def _compactar(texto: str, contexto: str) -> str:
+    """Código en ASCII sin marcas ni escapes de GIFT: la forma más corta y natural.
+
+    Primero se protege en su contexto (así se interpretan los escapes de GIFT) y
+    después se restaura sin escapar.
+    """
+    texto, _ = transformar_codigo(texto, contexto=contexto, fullwidth=True, espacios=False, saltos=False)
+    texto, _ = transformar_codigo(texto, contexto="xml", fullwidth=False)
+    return texto
+
+
+def _leer_gift(ruta: Path) -> Archivo:
+    segmentos: list = []
+    for bloque in split_gift_questions(ruta.read_text(encoding="utf-8")):
+        lineas = bloque.splitlines()
+        prefijo = []
+        while lineas and (lineas[0].strip().startswith("//") or lineas[0].strip().startswith("$CATEGORY")):
+            prefijo.append(lineas.pop(0))
+        cuerpo = "\n".join(lineas).strip()
+        preguntas = [q for q in GiftParser()._manual_parse(cuerpo) if q.type != "Category"] if cuerpo else []
+        if len(preguntas) != 1 or preguntas[0].type not in TIPOS_PROCESABLES:
+            segmentos.append(bloque)
+            continue
+        _, marcas = usa_convencion(cuerpo, "gift")
+        segmentos.append(Unidad(
+            archivo=ruta, formato="gift", texto=_compactar(cuerpo, "gift"), tipo=preguntas[0].type,
+            original=bloque, prefijo=prefijo, fullwidth=True, marcas=marcas, forma=_forma(preguntas[0]),
+        ))
+    return Archivo(ruta, "gift", segmentos)
+
+
+def _compactar_pregunta(q: Question) -> Question:
+    q = copy.deepcopy(q)
+    textos = [q.stem, q.global_feedback, q.true_feedback, q.false_feedback]
+    textos += [c.text for c in q.choices] + [c.feedback for c in q.choices]
+    textos += [p.subquestion for p in q.match_pairs]
+    for ft in textos:
+        if ft is not None and ft.text:
+            ft.text = _compactar(ft.text, "xml")
+    for p in q.match_pairs:
+        p.subanswer = _compactar(p.subanswer or "", "xml")
+    return q
+
+
+def _leer_xml(ruta: Path) -> Archivo:
+    contenido = ruta.read_text(encoding="utf-8")
+    raiz = ET.fromstring(contenido)
+    segmentos: list = []
+    for elemento in raiz.findall("question"):
+        q = _pregunta_xml(elemento)
+        if q.type not in TIPOS_PROCESABLES:
+            segmentos.append(elemento)
+            continue
+        crudo = ET.tostring(elemento, encoding="unicode")
+        fullwidth, marcas = usa_convencion("\n".join(t.text or "" for t in elemento.iter("text")), "xml")
+        segmentos.append(Unidad(
+            archivo=ruta, formato="xml", texto=question_to_gift(_compactar_pregunta(q), escapar_codigo=False), tipo=q.type,
+            original=crudo, elemento=elemento, fullwidth=fullwidth, marcas=marcas, forma=_forma(q),
+        ))
+    return Archivo(ruta, "xml", segmentos, raiz=raiz)
+
+
+def leer_archivos(rutas: List[Path]) -> List[Archivo]:
+    archivos = []
+    for ruta in rutas:
+        try:
+            archivos.append(_leer_xml(ruta) if ruta.suffix.lower() == ".xml" else _leer_gift(ruta))
+        except Exception as e:  # noqa: BLE001 - se informa y se sigue con el resto
+            print(f"❌ Error leyendo {ruta}: {e}")
+    return archivos
+
+
+def unidades_de(archivos: List[Archivo]) -> List[Unidad]:
+    return [s for a in archivos for s in a.segmentos if isinstance(s, Unidad)]
+
+
+# ---------------------------------------------------------------------------
+# Prompt y respuesta
+# ---------------------------------------------------------------------------
+
+_CONVENCIONES = (
+    "Formato: cada pregunta es GIFT de Moodle. El código va siempre entre ``` o `...`, en ASCII normal "
+    "y sin escapar (el código fuera de esos delimitadores rompe el GIFT)."
+)
+
+
+def construir_prompt(textos: List[str], mode: str, custom_prompt: Optional[str] = None) -> str:
     if mode == "improve":
-        system_instruction = (
-            "Eres un experto en pedagogía y formato GIFT de Moodle. "
-            "Tu tarea es mejorar la claridad, gramática y calidad pedagógica de las siguientes preguntas GIFT. "
-            "Mantén estrictamente el formato GIFT para cada pregunta. Separa las preguntas con una línea en blanco. "
-            "No añadas explicaciones fuera de los bloques de las preguntas."
+        instruccion = (
+            "Sos experto en pedagogía y en el formato GIFT de Moodle. Mejorá la claridad, la gramática y la "
+            "calidad pedagógica de cada pregunta sin cambiar su tipo ni lo que evalúa."
         )
         if custom_prompt:
-            system_instruction += f"\nInstrucción adicional: {custom_prompt}"
+            instruccion += f"\nInstrucción adicional: {custom_prompt}"
+        salida = "una pregunta por cada una recibida"
     elif mode == "multiply":
-        system_instruction = (
-            "Eres un experto en pedagogía y formato GIFT de Moodle. "
-            "Tu tarea es crear 3 variaciones similares para CADA UNA de las siguientes preguntas GIFT. "
-            "Mantén estrictamente el formato GIFT. Separa cada pregunta con una línea en blanco. "
-            "No añadas explicaciones fuera de las preguntas."
+        instruccion = (
+            f"Sos experto en pedagogía y en el formato GIFT de Moodle. Creá {VARIACIONES} variaciones de cada "
+            "pregunta que evalúen el mismo objetivo con otro contexto o distractores."
         )
+        if custom_prompt:
+            instruccion += f"\nInstrucción adicional: {custom_prompt}"
+        salida = f"{VARIACIONES} preguntas por cada una recibida, cada una precedida por su marcador"
     else:  # transform
-        system_instruction = (
-            "Eres un experto en formato GIFT de Moodle. "
-            "Tu tarea es transformar las siguientes preguntas siguiendo estas instrucciones:\n"
-            f"{custom_prompt or 'Mejora las preguntas manteniendo el formato GIFT.'}\n"
-            "Mantén estrictamente el formato GIFT en la salida. No añadas explicaciones fuera del bloque de la pregunta."
+        instruccion = (
+            "Sos experto en el formato GIFT de Moodle. Transformá cada pregunta según estas instrucciones:\n"
+            f"{custom_prompt or 'Mejorá las preguntas manteniendo el formato GIFT.'}"
         )
+        salida = "una pregunta por cada una recibida"
 
-    # Use a clear separator in the prompt
-    batch_text = ""
-    for i, q in enumerate(questions):
-        batch_text += f"--- PREGUNTA {i+1} ---\n{q}\n\n"
-
-    prompt = (
-        f"Procesa este lote de {len(questions)} preguntas GIFT:\n\n{batch_text}\n\n"
-        "REQUISITO CRÍTICO: Devuelve las preguntas procesadas en el mismo orden, "
-        "separadas por una línea que contenga únicamente '---'. "
-        "No incluyas preámbulos ni conclusiones."
+    lote = "\n\n".join(f"--- PREGUNTA {i} ---\n{t}" for i, t in enumerate(textos, 1))
+    return (
+        f"{instruccion}\n{_CONVENCIONES}\n\n"
+        f"Devolvé {salida}, en el mismo orden y precedida por la misma línea '--- PREGUNTA n ---' "
+        "que la original. Sin explicaciones ni bloques ``` alrededor.\n\n"
+        f"{lote}"
     )
-    
+
+
+_MARCADOR = re.compile(r"^-{3,}\s*PREGUNTA\s+(\d+)\s*-{3,}\s*$", re.MULTILINE | re.IGNORECASE)
+
+
+def _sin_cerco(texto: str) -> str:
+    """Quita un ```gift … ``` que envuelva todo el texto (una pregunta nunca empieza con ```)."""
+    texto = texto.strip()
+    if texto.startswith("```") and texto.endswith("```") and "\n" in texto:
+        return texto.split("\n", 1)[1][:-3].strip()
+    return texto
+
+
+def separar_respuesta(texto: str, cantidad: int) -> Dict[int, List[str]]:
+    """Asigna cada pregunta devuelta a su número de pregunta enviada."""
+    texto = _sin_cerco(texto)
+    marcas = list(_MARCADOR.finditer(texto))
+    resultado: Dict[int, List[str]] = {}
+    if marcas:
+        for actual, siguiente in zip(marcas, marcas[1:] + [None]):
+            numero = int(actual.group(1))
+            bloque = _sin_cerco(texto[actual.end():siguiente.start() if siguiente else len(texto)])
+            if bloque and 1 <= numero <= cantidad:
+                resultado.setdefault(numero, []).append(bloque)
+        return resultado
+    # Sin marcadores: separadores '---' en su propia línea, en orden.
+    bloques = [_sin_cerco(b) for b in re.split(r"^-{3,}\s*$", texto, flags=re.MULTILINE)]
+    for i, bloque in enumerate(b for b in bloques if b):
+        if i < cantidad:
+            resultado[i + 1] = [bloque]
+    return resultado
+
+
+def _forma(q: Question) -> tuple:
+    """Cantidad de opciones y de correctas: lo que `improve` no debería cambiar."""
+    return (len(q.choices) + len(q.match_pairs), sum(1 for c in q.choices if c.is_correct))
+
+
+def _interpretar(gift: str) -> Optional[tuple]:
+    """(GIFT protegido, Question) si el texto es exactamente una pregunta GIFT válida."""
+    # El código de la respuesta viene crudo (así se envió): se protege sin desescapar.
+    gift, _ = transformar_codigo(gift, contexto="gift", fullwidth=True, espacios=False, saltos=False, escapes=False)
+    preguntas = [q for q in GiftParser()._manual_parse(gift) if q.type != "Category"]
+    if len(preguntas) != 1 or preguntas[0].type not in TIPOS_PROCESABLES:
+        return None
+    return gift, preguntas[0]
+
+
+def aplicar_respuesta(unidades: List[Unidad], respuesta: Dict[int, List[str]], mode: str) -> int:
+    """Valida y asigna lo devuelto a cada unidad. Devuelve cuántas quedaron sin cambios."""
+    sin_cambios = 0
+    for numero, unidad in enumerate(unidades, 1):
+        validas = []
+        for bloque in respuesta.get(numero, []):
+            interpretado = _interpretar(bloque)
+            if interpretado is None:
+                print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): la respuesta no es una pregunta GIFT válida.")
+                continue
+            if mode != "multiply" and interpretado[1].type != unidad.tipo:
+                print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): el modelo cambió el tipo "
+                      f"{unidad.tipo} → {interpretado[1].type}; se conserva el original.")
+                continue
+            if mode == "improve" and _forma(interpretado[1]) != unidad.forma:
+                # Típico de un = o ~ crudo fuera del código que parte una opción.
+                print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): cambió la cantidad de opciones o de "
+                      "correctas; se conserva el original.")
+                continue
+            validas.append(interpretado)
+        if mode != "multiply":
+            validas = validas[:1]
+        if not validas:
+            sin_cambios += 1
+            continue
+        unidad.procesado_gift = [g for g, _ in validas]
+        unidad.procesado = [q for _, q in validas]
+    return sin_cambios
+
+
+def process_batch(client, model_id: str, unidades: List[Unidad], mode: str,
+                  custom_prompt: Optional[str] = None) -> int:
+    """Envía un lote al modelo y aplica la respuesta. Devuelve cuántas quedaron sin cambios."""
+    if not unidades:
+        return 0
+    prompt = construir_prompt([u.texto for u in unidades], mode, custom_prompt)
     try:
-        response = client.models.generate_content(
-            model=model_id,
-            contents=f"{system_instruction}\n\n{prompt}"
-        )
-        
-        # Split by the separator used by the AI
-        raw_output = response.text.strip()
-        processed_blocks = re.split(r'\n---\n|---', raw_output)
-        
-        # Filter and clean
-        processed_questions = [p.strip() for p in processed_blocks if p.strip()]
-        
-        # Validate that we got a reasonable number of questions
-        if mode == 'multiply':
-            # In multiply mode we expect roughly 3x questions
-            if len(processed_questions) < len(questions):
-                print(f"  ⚠️ Advertencia: El lote devolvió menos preguntas ({len(processed_questions)}) de las esperadas.")
-        else:
-            if len(processed_questions) != len(questions):
-                print(f"  ⚠️ Advertencia: El lote devolvió {len(processed_questions)} preguntas pero se enviaron {len(questions)}.")
-        
-        return processed_questions
-    except Exception as e:
+        response = client.models.generate_content(model=model_id, contents=prompt)
+    except Exception as e:  # noqa: BLE001
         print(f"❌ Error procesando lote con Gemini: {e}")
-        return questions # Return original batch on error
+        return len(unidades)
+    return aplicar_respuesta(unidades, separar_respuesta(response.text or "", len(unidades)), mode)
 
-def run_global_ai_processing(client: genai.Client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str, custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False, suffix: Optional[str] = None):
-    """Procesa todas las preguntas de todos los archivos en lotes globales."""
-    
-    all_questions_meta = [] # List of { "path": Path, "text": str }
-    
+
+# ---------------------------------------------------------------------------
+# Escritura: cada formato vuelve a su convención original
+# ---------------------------------------------------------------------------
+
+def _gift_final(gift: str, unidad: Unidad) -> str:
+    gift, _ = transformar_codigo(gift, contexto="gift", fullwidth=True, espacios=unidad.marcas, saltos=unidad.marcas)
+    return format_gift_content(gift).strip()
+
+
+def _sin_id(lineas: List[str]) -> List[str]:
+    """Las variaciones no heredan el [id:…] del original (tiene que ser único)."""
+    return [linea for linea in (re.sub(r"\s*\[id:[^\]]*\]", "", ln) for ln in lineas) if linea.strip() not in ("", "//")]
+
+
+def escribir_gift(archivo: Archivo) -> str:
+    bloques = []
+    for s in archivo.segmentos:
+        if not isinstance(s, Unidad):
+            bloques.append(s)
+        elif not s.procesado_gift:
+            bloques.append(s.original)
+        else:
+            for i, gift in enumerate(s.procesado_gift):
+                prefijo = s.prefijo if i == 0 else _sin_id(s.prefijo)
+                bloques.append("\n".join(prefijo + [_gift_final(gift, s)]))
+    return "\n\n".join(bloques) + "\n"
+
+
+def _poner_texto(padre: ET.Element, texto: str) -> None:
+    t = padre.find("text")
+    if t is None:
+        t = ET.SubElement(padre, "text")
+    t.text = texto
+
+
+def _hijo(el: ET.Element, tag: str, formato: Optional[str] = None) -> ET.Element:
+    hijo = el.find(tag)
+    if hijo is None:
+        hijo = ET.SubElement(el, tag, {"format": formato} if formato else {})
+    return hijo
+
+
+def aplicar_a_xml(original: ET.Element, q: Question, unidad: Unidad, variacion: bool = False) -> ET.Element:
+    """Copia el <question> original con el contenido de `q` (lo que GIFT no tiene se conserva)."""
+    if unidad.fullwidth:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=True,
+                                      espacios=unidad.marcas, saltos=unidad.marcas)[0]
+    else:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=False)[0]
+
+    el = copy.deepcopy(original)
+    if q.title:
+        _poner_texto(_hijo(el, "name"), q.title)
+    qt = _hijo(el, "questiontext", "html")
+    _poner_texto(qt, adaptar(q.stem.text if q.stem else ""))
+    formato = qt.get("format") or "html"
+    if q.global_feedback is not None or el.find("generalfeedback") is not None:
+        _poner_texto(_hijo(el, "generalfeedback", formato), adaptar(q.global_feedback.text if q.global_feedback else ""))
+    if variacion and el.find("idnumber") is not None:
+        el.find("idnumber").text = None
+
+    hijos = list(el)
+
+    def reemplazar(tag: str, nuevos: List[ET.Element]) -> None:
+        viejos = el.findall(tag)
+        posicion = hijos.index(viejos[0]) if viejos else len(list(el))
+        for v in viejos:
+            el.remove(v)
+        for i, n in enumerate(nuevos):
+            el.insert(posicion + i, n)
+
+    def respuesta(i: int, viejas: List[ET.Element]) -> ET.Element:
+        if i < len(viejas):
+            return copy.deepcopy(viejas[i])
+        return copy.deepcopy(viejas[0]) if viejas else ET.Element("answer", {"format": formato})
+
+    if q.type in ("MC", "Short", "Numerical"):
+        viejas = el.findall("answer")
+        nuevas = []
+        for i, c in enumerate(q.choices):
+            a = respuesta(i, viejas)
+            fraccion = c.weight if c.weight is not None else (100.0 if c.is_correct else 0.0)
+            a.set("fraction", f"{fraccion:g}")
+            texto = c.text.text if c.text else ""
+            if q.type == "Numerical":
+                numero, _, tolerancia = texto.partition(":")
+                _poner_texto(a, numero.strip())
+                tol = a.find("tolerance")
+                if tolerancia.strip():
+                    (tol if tol is not None else ET.SubElement(a, "tolerance")).text = tolerancia.strip()
+                elif tol is not None:
+                    a.remove(tol)
+            else:
+                _poner_texto(a, adaptar(texto))
+            _poner_texto(_hijo(a, "feedback", formato), adaptar(c.feedback.text if c.feedback else ""))
+            nuevas.append(a)
+        reemplazar("answer", nuevas)
+        single = el.find("single")
+        if q.type == "MC" and single is not None:
+            single.text = "true" if any(c.is_correct and c.weight is None for c in q.choices) else "false"
+    elif q.type == "TF":
+        viejas = {(a.findtext("text") or "").strip().lower(): a for a in el.findall("answer")}
+        nuevas = []
+        for valor, retro in (("true", q.true_feedback), ("false", q.false_feedback)):
+            a = copy.deepcopy(viejas[valor]) if valor in viejas else ET.Element("answer")
+            a.set("fraction", "100" if q.is_true == (valor == "true") else "0")
+            _poner_texto(a, valor)
+            _poner_texto(_hijo(a, "feedback", formato), adaptar(retro.text if retro else ""))
+            nuevas.append(a)
+        reemplazar("answer", nuevas)
+    elif q.type == "Matching":
+        viejas = el.findall("subquestion")
+        nuevas = []
+        for i, par in enumerate(q.match_pairs):
+            sq = copy.deepcopy(viejas[i] if i < len(viejas) else viejas[0]) if viejas else ET.Element("subquestion", {"format": formato})
+            _poner_texto(sq, adaptar(par.subquestion.text))
+            _poner_texto(_hijo(sq, "answer"), adaptar(par.subanswer))
+            nuevas.append(sq)
+        reemplazar("subquestion", nuevas)
+    return el
+
+
+def escribir_xml(archivo: Archivo) -> str:
+    quiz = ET.Element("quiz")
+    for s in archivo.segmentos:
+        if not isinstance(s, Unidad):
+            quiz.append(s)
+        elif not s.procesado:
+            quiz.append(s.elemento)
+        else:
+            for i, q in enumerate(s.procesado):
+                quiz.append(aplicar_a_xml(s.elemento, q, s, variacion=i > 0))
+    return serializar_quiz(quiz)
+
+
+def escribir(archivo: Archivo) -> str:
+    return escribir_xml(archivo) if archivo.formato == "xml" else escribir_gift(archivo)
+
+
+# ---------------------------------------------------------------------------
+# Proceso global
+# ---------------------------------------------------------------------------
+
+def estadisticas(unidades: List[Unidad]) -> Dict[str, int]:
+    original = sum(len(u.original) for u in unidades)
+    enviado = sum(len(u.texto) for u in unidades)
+    return {"preguntas": len(unidades), "caracteres_original": original, "caracteres_enviados": enviado}
+
+
+def run_global_ai_processing(client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str,
+                             custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False,
+                             suffix: Optional[str] = None, dry_run: bool = False):
+    """Procesa todas las preguntas de todos los archivos (GIFT y XML) en lotes globales."""
     print(f"🔍 Escaneando {len(file_paths)} archivos...")
-    for path in file_paths:
-        try:
-            content = path.read_text(encoding='utf-8')
-            questions = split_gift_questions(content)
-            for q in questions:
-                all_questions_meta.append({"path": path, "text": q})
-        except Exception as e:
-            print(f"❌ Error leyendo {path}: {e}")
-
-    total_questions = len(all_questions_meta)
-    if total_questions == 0:
+    archivos = leer_archivos(file_paths)
+    unidades = unidades_de(archivos)
+    if not unidades:
         print("⚠️ No se encontraron preguntas para procesar.")
         return
 
-    print(f"🚀 Iniciando procesamiento de {total_questions} preguntas en lotes de {batch_size}...")
-    
-    # Process in batches
-    for i in range(0, total_questions, batch_size):
-        batch_meta = all_questions_meta[i:i+batch_size]
-        batch_texts = [m["text"] for m in batch_meta]
-        
-        print(f"  📦 Lote {i//batch_size + 1}/{(total_questions-1)//batch_size + 1} ({len(batch_texts)} preguntas)...")
-        
-        processed_texts = process_batch(client, model_id, batch_texts, mode, custom_prompt)
-        
-        # Map results back
-        if mode == 'multiply':
-            if len(processed_texts) == len(batch_texts) * 3:
-                for j, meta in enumerate(batch_meta):
-                    meta["processed"] = "\n\n".join(processed_texts[j*3 : (j+1)*3])
-            else:
-                batch_meta[0]["processed"] = "\n\n".join(processed_texts)
-                for j in range(1, len(batch_meta)):
-                    batch_meta[j]["processed"] = ""
-        else:
-            # 1:1 mapping (Improve / Transform)
-            for j, meta in enumerate(batch_meta):
-                if j < len(processed_texts):
-                    meta["processed"] = processed_texts[j]
-                else:
-                    meta["processed"] = meta["text"] # Fallback to original
+    datos = estadisticas(unidades)
+    ahorro = 100 - datos["caracteres_enviados"] * 100 // max(datos["caracteres_original"], 1)
+    print(f"📏 {datos['preguntas']} preguntas: se envían {datos['caracteres_enviados']} caracteres "
+          f"de {datos['caracteres_original']} en los archivos ({ahorro}% menos).")
 
-    # Write results back
+    lotes = [unidades[i:i + batch_size] for i in range(0, len(unidades), batch_size)]
+    if dry_run:
+        print(f"🧪 Simulación: {len(lotes)} lotes; no se llama al modelo. Primer lote:\n")
+        print(construir_prompt([u.texto for u in lotes[0]], mode, custom_prompt))
+        return
+
+    print(f"🚀 Procesando en {len(lotes)} lotes de hasta {batch_size} preguntas...")
+    sin_cambios = 0
+    for n, lote in enumerate(lotes, 1):
+        print(f"  📦 Lote {n}/{len(lotes)} ({len(lote)} preguntas)...")
+        sin_cambios += process_batch(client, model_id, lote, mode, custom_prompt)
+
     print("💾 Guardando resultados...")
-    files_to_write = {} # Path -> List[str]
-    
-    for meta in all_questions_meta:
-        path = meta["path"]
-        if path not in files_to_write:
-            files_to_write[path] = []
-        if "processed" in meta and meta["processed"]:
-            files_to_write[path].append(meta["processed"])
-        else:
-            files_to_write[path].append(meta["text"])
-
-    modified_count = 0
-    for path, questions in files_to_write.items():
-        output_content = "\n\n".join(questions) + "\n"
-        
+    # En el directorio de salida se conserva la estructura relativa: en un banco hay
+    # muchos q01.gift en carpetas distintas que, aplanados, se pisarían.
+    base = Path(os.path.commonpath([str(a.ruta.parent.resolve()) for a in archivos]))
+    for archivo in archivos:
+        contenido = escribir(archivo)
+        ruta = archivo.ruta
         if in_place:
-            if suffix:
-                output_path = path.parent / f"{path.stem}{suffix}{path.suffix}"
-                output_path.write_text(output_content, encoding='utf-8')
-                print(f"  ✓ {output_path} (creado con sufijo)")
-            else:
-                path.write_text(output_content, encoding='utf-8')
-                print(f"  ✓ {path} (actualizado)")
+            destino = ruta.parent / f"{ruta.stem}{suffix}{ruta.suffix}" if suffix else ruta
         else:
-            output_filename = path.stem + f"_{mode}" + path.suffix
-            output_path = output_dir / output_filename
-            output_path.write_text(output_content, encoding='utf-8')
-            print(f"  ✓ {output_path} (creado)")
-        modified_count += 1
+            destino = output_dir / ruta.parent.resolve().relative_to(base) / f"{ruta.stem}_{mode}{ruta.suffix}"
+            destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(contenido, encoding="utf-8")
+        print(f"  ✓ {destino}")
 
-    print(f"\n✅ Finalizado: {modified_count} archivos procesados.")
-
-def main():
-    parser = argparse.ArgumentParser(
-        description='Procesa preguntas GIFT usando Google Gemini para mejora, multiplicación o transformación.',
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    
-    parser.add_argument('inputs', nargs='+', help='Archivos .gift o directorios a procesar')
-    parser.add_argument('--mode', choices=['improve', 'multiply', 'transform'], default='improve',
-                        help='Modo: improve (mejorar), multiply (variaciones) o transform (usar prompt personalizado)')
-    parser.add_argument('--prompt', help='Prompt personalizado o ruta a un archivo .txt con el prompt')
-    parser.add_argument('--output', help='Directorio de salida (por defecto: output_<mode>)')
-    parser.add_argument('--model', help='Modelo de Gemini (default: configurado o gemini-2.0-flash)')
-    parser.add_argument('-r', '--recursive', action='store_true', help='Procesar subdirectorios recursivamente')
-    parser.add_argument('--batch-size', type=int, default=5, help='Número de preguntas por petición (default: 5)')
-    parser.add_argument('-i', '--in-place', action='store_true', help='Escribir en la misma carpeta que el original')
-    parser.add_argument('--suffix', help='Sufijo para los nuevos archivos (usado con --in-place, ej: -ia)')
-
-    args = parser.parse_args()
-    
-    # Resolver prompt
-    custom_prompt = args.prompt
-    if custom_prompt and Path(custom_prompt).exists() and Path(custom_prompt).is_file():
-        custom_prompt = Path(custom_prompt).read_text(encoding='utf-8').strip()
-    
-    mode = args.mode
-    if args.prompt and args.mode == 'improve':
-        mode = 'transform'
-
-    try:
-        client = load_config()
-    except ValueError as e:
-        print(e)
-        sys.exit(1)
-    
-    active_model = args.model or get_model()
-    
-    output_dir = None
-    if not args.in_place:
-        output_dir = Path(args.output) if args.output else Path(f"output_{mode}")
-        output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Collect all file paths
-    file_paths = []
-    for input_str in args.inputs:
-        input_path = Path(input_str)
-        if not input_path.exists():
-            print(f"❌ Error: La ruta {input_str} no existe.")
-            continue
-            
-        if input_path.is_file():
-            if input_path.suffix == '.gift':
-                file_paths.append(input_path)
-        elif input_path.is_dir():
-            pattern = "**/*.gift" if args.recursive else "*.gift"
-            file_paths.extend(sorted(list(input_path.glob(pattern))))
-
-    if not file_paths:
-        print("❌ No se encontraron archivos .gift para procesar.")
-        sys.exit(1)
-
-    run_global_ai_processing(
-        client=client,
-        model_id=active_model,
-        file_paths=file_paths,
-        output_dir=output_dir,
-        mode=mode,
-        custom_prompt=custom_prompt,
-        batch_size=args.batch_size,
-        in_place=args.in_place,
-        suffix=args.suffix
-    )
-
-if __name__ == '__main__':
-    main()
+    if sin_cambios:
+        print(f"⚠️ {sin_cambios} preguntas quedaron como estaban (respuesta ausente o inválida).")
+    print(f"\n✅ Finalizado: {len(archivos)} archivos procesados.")

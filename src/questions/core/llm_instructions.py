@@ -40,6 +40,7 @@ AI_INSTRUCTIONS = r"""
 1. **Modo Improve**: Mejora la gramática y precisión pedagógica sin alterar la estructura GIFT fundamental.
 2. **Modo Multiply**: Crea variaciones que evalúen el mismo objetivo de aprendizaje pero con diferentes contextos o distractores.
 3. **Salida Pura**: Devuelve únicamente el código GIFT, sin preámbulos ni explicaciones adicionales.
+4. **GIFT y XML**: `ai` acepta ambos formatos; el modelo siempre recibe GIFT compacto (sin comentarios, categorías ni marcas `·`/`↵`, código en ASCII entre ``` o `...`) y la respuesta se aplica sobre el archivo original. `--dry-run` muestra el prompt sin llamar a la API.
 """
 
 FIX_INSTRUCTIONS = r"""
