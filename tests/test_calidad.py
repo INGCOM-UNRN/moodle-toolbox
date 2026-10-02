@@ -67,3 +67,19 @@ def test_moodle_xml_expone_los_campos_de_moodle():
            '<penalty>0.3333333</penalty><defaultgrade>1</defaultgrade><shuffleanswers>0</shuffleanswers>'
            '<answer fraction="100"><text>a</text></answer></question></quiz>')
     assert parse_xml(xml)["questions"][0]["moodle"] == {"penalty": "0.3333333", "defaultgrade": "1", "shuffleanswers": "0"}
+
+
+def test_health_metadatos_de_moodle_por_categoria(tmp_path):
+    from questions.core.moodle_health import auditar_archivos
+
+    def pregunta(nombre, penalty, grade):
+        return (f'<question type="multichoice"><name><text>{nombre}</text></name><questiontext><text>q</text>'
+                f'</questiontext><penalty>{penalty}</penalty><defaultgrade>{grade}</defaultgrade>'
+                '<answer fraction="100"><text>a</text></answer><answer fraction="0"><text>b</text></answer></question>')
+    xml = ('<quiz><question type="category"><category><text>$course$/C</text></category></question>'
+           + pregunta("a", "0.3333333", "1") + pregunta("b", "0.33333330", "1.0") + pregunta("c", "0.1", "1") + "</quiz>")
+    (tmp_path / "b.xml").write_text(xml, encoding="utf-8")
+    moo = auditar_archivos([tmp_path / "b.xml"])["moodle"]
+    assert moo["preguntas_revisadas"] == 3
+    assert moo["inconsistencias"] == [{"categoria": "C", "tipo": "MC", "campo": "penalty",
+                                       "valores": {"0.333333": 2, "0.1": 1}}]

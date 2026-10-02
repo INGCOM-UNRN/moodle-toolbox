@@ -321,6 +321,37 @@ def auditar_redaccion(preguntas: Iterable[dict]) -> Dict[str, Any]:
     }
 
 
+CAMPOS_CONSISTENTES = ("penalty", "defaultgrade", "answernumbering", "shuffleanswers")
+
+
+def auditar_moodle(preguntas: Iterable[dict]) -> Dict[str, Any]:
+    """Campos de Moodle (sólo XML) que toman valores distintos dentro de una misma categoría
+    y tipo de pregunta: penalización, puntaje, numeración y mezcla de opciones."""
+    grupos: Dict[tuple, Dict[str, Counter]] = {}
+    revisadas = 0
+    for p in preguntas:
+        datos = p.get("moodle") or {}
+        if not datos:
+            continue
+        revisadas += 1
+        clave = (p.get("categoria") or "(sin categoría)", p.get("type"))
+        campos = grupos.setdefault(clave, {c: Counter() for c in CAMPOS_CONSISTENTES})
+        for campo in CAMPOS_CONSISTENTES:
+            if campo in datos:
+                valor = datos[campo]
+                try:
+                    valor = f"{float(valor):g}"
+                except ValueError:
+                    valor = valor.strip().lower()
+                campos[campo][valor] += 1
+    inconsistentes = [
+        {"categoria": cat, "tipo": tipo, "campo": campo, "valores": dict(cuenta.most_common())}
+        for (cat, tipo), campos in sorted(grupos.items())
+        for campo, cuenta in campos.items() if len(cuenta) > 1
+    ]
+    return {"preguntas_revisadas": revisadas, "inconsistencias": inconsistentes}
+
+
 def auditar_estructura(preguntas: Iterable[dict]) -> Dict[str, Any]:
     """Preguntas sin título o sin enunciado, código sin cerrar y conteo por tipo."""
     por_tipo: Counter = Counter()
@@ -494,6 +525,7 @@ def auditar_preguntas(
         "longitud": auditar_longitudes(preguntas, umbral_longitud),
         "clasificacion": auditar_clasificacion(preguntas),
         "redaccion": auditar_redaccion(preguntas),
+        "moodle": auditar_moodle(preguntas),
     }
 
 
@@ -605,6 +637,8 @@ def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
          len(resultado.get("redaccion", {}).get("preguntas_negacion_sin_resaltar", []))),
         ("distractores_debiles", "preguntas con distractores mucho más cortos que la correcta",
          len(resultado.get("redaccion", {}).get("preguntas_distractores_debiles", []))),
+        ("metadatos_moodle", "campos de Moodle con valores distintos en una misma categoría (penalización, puntaje…)",
+         len(resultado.get("moodle", {}).get("inconsistencias", []))),
         ("sin_niveles_altos", "categorías sin preguntas de B4–B6 (analizar, evaluar, crear)",
          len(resultado.get("clasificacion", {}).get("categorias_sin_niveles_altos", []))),
         ("codigo_xml_sin_proteger", "archivos XML con código sin proteger (se rompería al pasar a GIFT)",
@@ -809,6 +843,15 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
             if red[clave]:
                 lineas.append(f"### {titulo} ({len(red[clave])})")
                 _lista(lineas, red[clave], formato, max_items)
+
+    moo = resultado.get("moodle")
+    if moo and moo["inconsistencias"]:
+        lineas.append("## Metadatos de Moodle")
+        lineas.append(f"En {len(moo['inconsistencias'])} casos, preguntas del mismo tipo y categoría tienen valores "
+                      "distintos (sólo XML; GIFT no los representa):\n")
+        _lista(lineas, moo["inconsistencias"],
+               lambda i: f"{i['categoria']} · {i['tipo']} · {i['campo']}: "
+                         + ", ".join(f"{v} ({n})" for v, n in i["valores"].items()), max_items)
 
     cla = resultado.get("clasificacion")
     if cla and cla["clasificadas"]:
