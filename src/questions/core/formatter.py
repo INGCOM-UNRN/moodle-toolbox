@@ -11,7 +11,7 @@ import re
 import xml.etree.ElementTree as ET
 
 from questions.core.codigo import transformar_archivo, transformar_codigo
-from questions.core.gift_semantics import _extraer_ultimo_grupo_llaves, _llaves_balanceadas
+from questions.core.gift_semantics import _extraer_ultimo_grupo_llaves, corta_en_blanco
 
 
 # ---------------------------------------------------------------------------
@@ -19,15 +19,18 @@ from questions.core.gift_semantics import _extraer_ultimo_grupo_llaves, _llaves_
 # ---------------------------------------------------------------------------
 
 def _bloques_gift(content: str) -> list[str]:
-    """Separa las preguntas como el parser: una línea en blanco corta sólo con las llaves
-    balanceadas (el código con líneas en blanco queda dentro de su pregunta)."""
+    """Separa las preguntas como el parser (ver `corta_en_blanco`): el código con líneas
+    en blanco queda en su pregunta y una pregunta sin cerrar no se traga las siguientes."""
+    lineas = content.split("\n")
     bloques, actual = [], []
-    for linea in content.split("\n"):
+    for i, linea in enumerate(lineas):
         if not linea.strip():
-            if actual and _llaves_balanceadas("\n".join(actual)):
+            if not actual:
+                continue
+            if corta_en_blanco("\n".join(actual), lineas, i):
                 bloques.append("\n".join(actual))
                 actual = []
-            elif actual:
+            else:
                 actual.append("")
             continue
         actual.append(linea)

@@ -116,3 +116,20 @@ class GiftSemantics:
             return FormattedText(text=self._decode_escapes(text.strip()))
         
         return FormattedText()
+
+
+_INICIO_DE_PREGUNTA = re.compile(r"^\s*(::|\$CATEGORY:)")
+
+
+def corta_en_blanco(bloque: str, lineas: list, i: int) -> bool:
+    """¿La línea en blanco `lineas[i]` termina el bloque de pregunta `bloque`?
+
+    Sí si las llaves del bloque están balanceadas (el código con líneas en blanco queda
+    dentro de su pregunta) o si lo siguiente, salteando comentarios `//`, es otra
+    pregunta (`::título::`) o una `$CATEGORY`: así una pregunta con llaves sin cerrar
+    no se traga el resto del archivo, que es lo que haría Moodle.
+    """
+    if _llaves_balanceadas(bloque):
+        return True
+    siguiente = next((x for x in lineas[i + 1:] if x.strip() and not x.lstrip().startswith("//")), "")
+    return bool(_INICIO_DE_PREGUNTA.match(siguiente))

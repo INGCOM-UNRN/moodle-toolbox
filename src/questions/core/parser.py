@@ -15,7 +15,7 @@ from questions.core.gift_model import (  # noqa: F401
 )
 from questions.core.metadatos import leer_clasificacion
 from questions.core.gift_semantics import (  # noqa: F401
-    GiftSemantics, _llaves_balanceadas, _extraer_ultimo_grupo_llaves,
+    GiftSemantics, _llaves_balanceadas, _extraer_ultimo_grupo_llaves, corta_en_blanco,
 )
 
 
@@ -69,11 +69,11 @@ class GiftParser:
             line = lines[i]
             stripped = line.strip()
             
-            # Separador: una línea vacía corta el bloque sólo si el bloque
-            # actual tiene sus llaves balanceadas. Así, el código C embebido
-            # (que suele tener líneas vacías y llaves propias) permanece junto.
+            # Separador: una línea vacía corta el bloque si sus llaves están
+            # balanceadas (el código C embebido, con líneas vacías y llaves propias,
+            # permanece junto) o si lo que sigue es otra pregunta (ver corta_en_blanco).
             if not stripped:
-                if current_block and _llaves_balanceadas("\n".join(current_block)):
+                if current_block and corta_en_blanco("\n".join(current_block), lines, i):
                     q = self._parse_question_block(current_block, current_comments)
                     if q:
                         questions.append(q)
