@@ -63,7 +63,9 @@ def dedup(
         from questions.core.deduplicar import confirmar_con_jev
 
         try:
-            cliente = ClienteJev()
+            from questions.core.cache import Cache
+
+            cliente = ClienteJev(cache=Cache("jev"))
         except ValueError as e:
             fail(str(e))
         grupos, descartados = confirmar_con_jev(grupos, cliente)

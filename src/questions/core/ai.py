@@ -32,6 +32,7 @@ try:
 except ImportError:
     genai = None
 
+from questions.core.cache import Cache
 from questions.core.codigo import transformar_codigo, usa_convencion
 from questions.core.config import get_api_key, get_model  # noqa: F401 - get_model lo usa el comando
 from questions.core.converter import question_to_gift
@@ -360,18 +361,43 @@ def completar_feedback(original: Question, nueva: Question) -> tuple:
     return completa, agregadas
 
 
+def _clave_cache(model_id: str, mode: str, custom_prompt: Optional[str], unidad: Unidad) -> str:
+    return Cache.clave("ai", model_id, mode, custom_prompt or "", unidad.texto)
+
+
 def process_batch(client, model_id: str, unidades: List[Unidad], mode: str,
-                  custom_prompt: Optional[str] = None) -> int:
-    """Envía un lote al modelo y aplica la respuesta. Devuelve cuántas quedaron sin cambios."""
+                  custom_prompt: Optional[str] = None, cache: Optional[Cache] = None) -> int:
+    """Envía un lote al modelo y aplica la respuesta. Devuelve cuántas quedaron sin cambios.
+
+    Con `cache`, las respuestas por pregunta se guardan bajo el hash de lo enviado.
+    """
     if not unidades:
         return 0
     prompt = construir_prompt([u.texto for u in unidades], mode, custom_prompt)
     try:
         response = client.models.generate_content(model=model_id, contents=prompt)
     except Exception as e:  # noqa: BLE001
-        print(f"❌ Error procesando lote con Gemini: {e}")
+        print(f"❌ Error procesando lote con el modelo: {e}")
         return len(unidades)
-    return aplicar_respuesta(unidades, separar_respuesta(response.text or "", len(unidades)), mode)
+    respuesta = separar_respuesta(response.text or "", len(unidades))
+    if cache is not None:
+        for numero, unidad in enumerate(unidades, 1):
+            if respuesta.get(numero):
+                cache.guardar(_clave_cache(model_id, mode, custom_prompt, unidad), respuesta[numero])
+    return aplicar_respuesta(unidades, respuesta, mode)
+
+
+def desde_cache(unidades: List[Unidad], model_id: str, mode: str, custom_prompt: Optional[str],
+                cache: Cache) -> List[Unidad]:
+    """Aplica las respuestas en caché y devuelve las unidades que hay que enviar."""
+    pendientes = []
+    for unidad in unidades:
+        guardada = cache.obtener(_clave_cache(model_id, mode, custom_prompt, unidad))
+        if guardada:
+            aplicar_respuesta([unidad], {1: guardada}, mode)
+        else:
+            pendientes.append(unidad)
+    return pendientes
 
 
 # ---------------------------------------------------------------------------
@@ -565,7 +591,7 @@ def estadisticas(unidades: List[Unidad]) -> Dict[str, int]:
 
 def run_global_ai_processing(client, model_id: str, file_paths: List[Path], output_dir: Optional[Path], mode: str,
                              custom_prompt: Optional[str] = None, batch_size: int = 5, in_place: bool = False,
-                             suffix: Optional[str] = None, dry_run: bool = False):
+                             suffix: Optional[str] = None, dry_run: bool = False, usar_cache: bool = True):
     """Procesa todas las preguntas de todos los archivos (GIFT y XML) en lotes globales."""
     print(f"🔍 Escaneando {len(file_paths)} archivos...")
     archivos = leer_archivos(file_paths)
@@ -587,11 +613,16 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
         print(construir_prompt([u.texto for u in lotes[0]], mode, custom_prompt))
         return
 
+    cache = Cache("ai", activa=usar_cache)
+    pendientes = desde_cache(unidades, model_id, mode, custom_prompt, cache)
+    if cache.aciertos:
+        print(f"♻️  {cache.aciertos} preguntas resueltas desde la caché (sin consultar al modelo).")
+    lotes = [pendientes[i:i + batch_size] for i in range(0, len(pendientes), batch_size)]
     print(f"🚀 Procesando en {len(lotes)} lotes de hasta {batch_size} preguntas...")
     sin_cambios = 0
     for n, lote in enumerate(lotes, 1):
         print(f"  📦 Lote {n}/{len(lotes)} ({len(lote)} preguntas)...")
-        sin_cambios += process_batch(client, model_id, lote, mode, custom_prompt)
+        sin_cambios += process_batch(client, model_id, lote, mode, custom_prompt, cache)
 
     print("💾 Guardando resultados...")
     # En el directorio de salida se conserva la estructura relativa: en un banco hay

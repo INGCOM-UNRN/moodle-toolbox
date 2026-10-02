@@ -33,6 +33,7 @@ from statistics import mean
 from typing import Dict, List, Optional
 
 from questions.core.ai import Archivo, Unidad, _compactar, leer_archivos, unidades_de
+from questions.core.cache import Cache
 from questions.core.gift_model import Question
 from questions.core.tree import serializar_quiz
 
@@ -101,7 +102,9 @@ def resolver_clave() -> Optional[str]:
 class ClienteJev:
     """POST /v1/systemone con reintentos ante 429/529/5xx y errores de red."""
 
-    def __init__(self, clave: Optional[str] = None, modelo: str = MODELO, reintentos: int = 5, espera: float = 1.0):
+    def __init__(self, clave: Optional[str] = None, modelo: str = MODELO, reintentos: int = 5, espera: float = 1.0,
+                 cache: Optional[Cache] = None):
+        self.cache = cache
         self.clave = clave or resolver_clave()
         if not self.clave:
             raise ValueError("No se encontró TYPESAFE_API_KEY (entorno, .env.local, ~/.env o ~/.questions/.env). "
@@ -111,6 +114,17 @@ class ClienteJev:
         self.espera = espera
 
     def consultar(self, state, questions: dict) -> dict:
+        clave_cache = Cache.clave("jev", self.modelo, state, questions)
+        if self.cache is not None:
+            guardada = self.cache.obtener(clave_cache)
+            if guardada is not None:
+                return guardada
+        respuesta = self._consultar(state, questions)
+        if self.cache is not None:
+            self.cache.guardar(clave_cache, respuesta)
+        return respuesta
+
+    def _consultar(self, state, questions: dict) -> dict:
         cuerpo = json.dumps({"state": state, "model": self.modelo, "questions": questions}).encode("utf-8")
         for intento in range(self.reintentos):
             pedido = urllib.request.Request(API_URL, data=cuerpo, method="POST", headers={

@@ -218,3 +218,17 @@ def test_feedback_saltea_las_preguntas_completas(tmp_path, capsys):
     modelo = Modelo(_con_feedback)
     ai.run_global_ai_processing(modelo, "simulado", [archivo], tmp_path / "salida", "feedback")
     assert modelo.prompts == [] and "No se encontraron preguntas" in capsys.readouterr().out
+
+
+def test_cache_evita_volver_a_consultar_al_modelo(tmp_path):
+    modelo = Modelo(lambda n, t: [t.replace("nada", "no imprime nada")])
+    primera = _procesar(tmp_path, "b.gift", GIFT, modelo)
+    assert len(modelo.prompts) == 1
+    segunda = _procesar(tmp_path, "b.gift", GIFT, modelo)
+    assert len(modelo.prompts) == 1 and segunda == primera
+    # Otro modo u otra instrucción no comparten la respuesta.
+    _procesar(tmp_path, "b.gift", GIFT, modelo, mode="transform")
+    assert len(modelo.prompts) == 2
+    archivo = tmp_path / "banco" / "b.gift"
+    ai.run_global_ai_processing(modelo, "simulado", [archivo], tmp_path / "salida", "improve", usar_cache=False)
+    assert len(modelo.prompts) == 3

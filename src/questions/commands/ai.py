@@ -30,6 +30,8 @@ def ai(
     concurrencia: int = typer.Option(4, "--concurrencia", help="classify: solicitudes simultáneas a Jev."),
     reclasificar: bool = typer.Option(False, "--reclasificar", help="classify: volver a clasificar las ya clasificadas."),
     tags: bool = typer.Option(False, "--tags", help="classify: escribir también tags de Moodle (bloom:…, dificultad-…)."),
+    sin_cache: bool = typer.Option(
+        False, "--sin-cache", help="No usar ni guardar respuestas en la caché (~/.cache/questions)."),
     dry_run: bool = typer.Option(
         False, "-n", "--dry-run",
         help="Mostrar lo que se enviaría (y cuánto se ahorra) sin llamar al modelo ni escribir archivos.",
@@ -71,7 +73,9 @@ def ai(
         cliente = None
         if not dry_run:
             try:
-                cliente = ClienteJev()
+                from questions.core.cache import Cache
+
+                cliente = ClienteJev(cache=Cache("jev", activa=not sin_cache))
             except ValueError as e:
                 fail(str(e))
         output_dir = None
@@ -107,4 +111,5 @@ def ai(
         in_place=in_place,
         suffix=suffix,
         dry_run=dry_run,
+        usar_cache=not sin_cache,
     )

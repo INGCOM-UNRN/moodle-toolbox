@@ -194,3 +194,20 @@ def test_cli_classify_dry_run_sin_clave(tmp_path, monkeypatch):
     assert '"contexto": "P1 (C)"' in res.output and '"respuestas"' in res.output
     res = runner.invoke(cli, ["ai", str(tmp_path), "--mode", "classify"])
     assert res.exit_code == 1 and "TYPESAFE_API_KEY" in res.output
+
+
+def test_cliente_jev_usa_la_cache(monkeypatch):
+    from questions.core.cache import Cache
+
+    llamadas = []
+
+    def urlopen(pedido, timeout):
+        llamadas.append(1)
+        return io.BytesIO(json.dumps(respuesta()).encode())
+
+    monkeypatch.setattr(cl.urllib.request, "urlopen", urlopen)
+    cliente = cl.ClienteJev(clave="k", espera=0, cache=Cache("jev"))
+    assert cliente.consultar({"a": 1}, {"q": {}}) == cliente.consultar({"a": 1}, {"q": {}})
+    assert len(llamadas) == 1
+    cliente.consultar({"a": 2}, {"q": {}})
+    assert len(llamadas) == 2
