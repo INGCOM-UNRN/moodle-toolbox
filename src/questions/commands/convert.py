@@ -23,6 +23,7 @@ def convert(llm: bool = LLM_OPTION):
 def html_to_md(
     paths: Optional[List[str]] = typer.Argument(None, exists=True),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
 ):
     """Convierte tags HTML a Markdown en archivos XML o GIFT."""
     if not paths:
@@ -48,8 +49,9 @@ def html_to_md(
                 modified = convert_html_tags_to_markdown(content)
             
             if content != modified:
-                f.write_text(modified, encoding='utf-8')
-                click.echo(f"✓ {f}")
+                if not dry_run:
+                    f.write_text(modified, encoding='utf-8')
+                click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}{f}")
                 modified_count += 1
         except Exception as e:
             click.echo(f"Error en {f}: {e}", err=True)

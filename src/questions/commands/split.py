@@ -13,6 +13,7 @@ def split(
     llm: bool = LLM_OPTION,
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente."),
     remove: bool = typer.Option(False, "--remove", help="Borrar el archivo original después de dividirlo."),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No crear ni borrar archivos; sólo contar."),
 ):
     """Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales."""
     if not paths:
@@ -37,12 +38,12 @@ def split(
     
     for f in sorted(files):
         try:
-            count = split_file(f)
+            count = split_file(f, simular=dry_run)
             if count > 0:
-                click.echo(f"✓ {f}: dividido en {count} archivos")
+                click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}{f}: dividido en {count} archivos")
                 total_new_files += count
                 total_split_files += 1
-                if remove:
+                if remove and not dry_run:
                     f.unlink()
         except Exception as e:
             click.echo(f"Error procesando {f}: {e}", err=True)

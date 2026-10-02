@@ -24,7 +24,7 @@ def _destino_libre(directorio: Path, base: str, sufijo: str, indice: int) -> Pat
     return destino
 
 
-def split_xml_file(file_path: Path) -> int:
+def split_xml_file(file_path: Path, simular: bool = False) -> int:
     """Divide un Moodle XML con varias preguntas en un archivo por pregunta.
 
     Cada archivo lleva la categoría vigente (la última `<question type="category">`
@@ -50,15 +50,16 @@ def split_xml_file(file_path: Path) -> int:
             quiz.append(categoria)
         quiz.append(q)
         destino = _destino_libre(file_path.parent, base, '.xml', i + 1)
-        destino.write_text(format_xml_content(ET.tostring(quiz, encoding='unicode')), encoding='utf-8')
+        if not simular:
+            destino.write_text(format_xml_content(ET.tostring(quiz, encoding='unicode')), encoding='utf-8')
         count += 1
     return count
 
 
-def split_file(file_path: Path) -> int:
+def split_file(file_path: Path, simular: bool = False) -> int:
     """Divide un archivo GIFT o Moodle XML en varios archivos individuales."""
     if file_path.suffix == '.xml':
-        return split_xml_file(file_path)
+        return split_xml_file(file_path, simular)
     if not file_path.suffix == '.gift':
         return 0
         
@@ -88,7 +89,8 @@ def split_file(file_path: Path) -> int:
         base_name = sanitize_filename(title) if title else f"{file_path.stem}_{i+1}"
         new_path = _destino_libre(file_path.parent, base_name, '.gift', i + 1)
         encabezado = f"{cat}\n\n" if cat and "$CATEGORY" not in q else ""
-        new_path.write_text(encabezado + q + "\n", encoding='utf-8')
+        if not simular:
+            new_path.write_text(encabezado + q + "\n", encoding='utf-8')
         count += 1
 
     return count

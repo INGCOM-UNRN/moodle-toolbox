@@ -32,7 +32,7 @@ def get_question_title(file_path: Path) -> Optional[str]:
             pass
     return None
 
-def set_question_title(file_path: Path, new_title: str) -> bool:
+def set_question_title(file_path: Path, new_title: str, simular: bool = False) -> bool:
     """Actualiza el título interno de una pregunta GIFT o XML."""
     if file_path.suffix == '.gift':
         content = file_path.read_text(encoding='utf-8')
@@ -44,7 +44,8 @@ def set_question_title(file_path: Path, new_title: str) -> bool:
             new_content = f"::{new_title}::\n{content}"
         
         if content != new_content:
-            file_path.write_text(new_content, encoding='utf-8')
+            if not simular:
+                file_path.write_text(new_content, encoding='utf-8')
             return True
             
     elif file_path.suffix == '.xml':
@@ -67,13 +68,14 @@ def set_question_title(file_path: Path, new_title: str) -> bool:
                 
                 new_content = re.sub(pattern, rf'\1{replacement}\3', content, count=1, flags=re.DOTALL)
                 if content != new_content:
-                    file_path.write_text(new_content, encoding='utf-8')
+                    if not simular:
+                        file_path.write_text(new_content, encoding='utf-8')
                     return True
         except Exception:
             pass
     return False
 
-def rename_to_slug(file_path: Path) -> Optional[Path]:
+def rename_to_slug(file_path: Path, simular: bool = False) -> Optional[Path]:
     """Renombra el archivo a su versión slugificada."""
     new_name = slugify(file_path.stem) + file_path.suffix
     new_path = file_path.parent / new_name
@@ -84,11 +86,12 @@ def rename_to_slug(file_path: Path) -> Optional[Path]:
             new_name = f"{slugify(file_path.stem)}_{counter}{file_path.suffix}"
             new_path = file_path.parent / new_name
             counter += 1
-        file_path.rename(new_path)
+        if not simular:
+            file_path.rename(new_path)
         return new_path
     return None
 
-def rename_from_title(file_path: Path) -> Optional[Path]:
+def rename_from_title(file_path: Path, simular: bool = False) -> Optional[Path]:
     """Renombra el archivo basándose en el título de la pregunta."""
     title = get_question_title(file_path)
     if title:
@@ -100,6 +103,7 @@ def rename_from_title(file_path: Path) -> Optional[Path]:
                 new_name = f"{slugify(title)}_{counter}{file_path.suffix}"
                 new_path = file_path.parent / new_name
                 counter += 1
-            file_path.rename(new_path)
+            if not simular:
+                file_path.rename(new_path)
             return new_path
     return None

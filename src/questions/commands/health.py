@@ -36,6 +36,7 @@ def health_cmd(
         UMBRAL_LONGITUD, "--umbral-longitud",
         help="Razón de largo correcta/distractores a partir de la cual se advierte.",
     ),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="Con --clean-html: mostrar qué se limpiaría sin escribir."),
     max_items: int = typer.Option(50, "--max-items", help="Máximo de preguntas listadas por sección (0: todas)."),
     estricto: bool = typer.Option(False, "--estricto", help="Salir con código 1 también ante advertencias."),
     output_csv: Optional[Path] = typer.Option(
@@ -74,9 +75,10 @@ def health_cmd(
             contenido = archivo.read_text(encoding="utf-8", errors="replace")
             limpio = limpiar_html_archivo(contenido, formato_de(archivo))
             if limpio != contenido:
-                archivo.write_text(limpio, encoding="utf-8")
+                if not dry_run:
+                    archivo.write_text(limpio, encoding="utf-8")
                 if not output_json:
-                    click.echo(f"✓ Archivo limpio de etiquetas obsoletas y estilos CSS inline: {archivo}")
+                    click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}HTML obsoleto y estilos inline: {archivo}")
 
     resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud,
                                  con_preguntas=output_csv is not None)

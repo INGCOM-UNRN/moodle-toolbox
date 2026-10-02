@@ -153,3 +153,35 @@ def test_accion_de_github_declara_sus_entradas_y_salidas():
     assert "${{" not in script
     ejemplo = (raiz / "docs" / "ejemplos" / "salud-banco.yml").read_text(encoding="utf-8")
     assert "uses: INGCOM-UNRN/moodle-toolbox@main" in ejemplo and "fetch-depth: 0" in ejemplo
+
+
+def test_dry_run_en_todos_los_comandos_que_escriben(tmp_path):
+    import hashlib
+
+    from questions.core.converter import gift_to_xml
+
+    raiz = tmp_path / "banco"
+    raiz.mkdir()
+    (raiz / "Mi Pregunta.gift").write_text(
+        "::Título Nuevo:: ¿Qué imprime?\n```\nint main(){\nreturn 0;}\n```\n{=0 ~1 ~2}\n\n::Otra:: ¿<b>Sí</b>? {T}\n",
+        encoding="utf-8")
+    (raiz / "Banco XML.xml").write_text(gift_to_xml("::X:: <p style='color:red'><font>¿Sí?</font></p> {T}\n"),
+                                        encoding="utf-8")
+
+    def foto():
+        return {p.relative_to(raiz): hashlib.sha256(p.read_bytes()).hexdigest() for p in raiz.rglob("*")}
+
+    antes = foto()
+    comandos = [
+        ["fix", "slugify"], ["fix", "name-from-title"], ["fix", "title-from-name"],
+        ["fix", "code-indent"], ["fix", "code-chars"],
+        ["xml", "cdata"], ["xml", "clean-tags"], ["xml", "rename"],
+        ["split", "--remove"], ["convert", "html-to-md"], ["health", "--clean-html"],
+    ]
+    for comando in comandos:
+        res = runner.invoke(cli, comando + [str(raiz), "-n"])
+        assert res.exception is None or isinstance(res.exception, SystemExit), (comando, res.output)
+        assert foto() == antes, comando
+    # Al menos los que tienen algo que hacer lo anuncian.
+    assert "[SIMULACIÓN]" in runner.invoke(cli, ["fix", "slugify", str(raiz), "-n"]).output
+    assert "[SIMULACIÓN]" in runner.invoke(cli, ["split", str(raiz), "-n"]).output
