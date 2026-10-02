@@ -62,8 +62,10 @@ otro proyecto, así que instalarlo por nombre traería un paquete ajeno.
 uv tool install git+https://github.com/INGCOM-UNRN/moodle-toolbox
 # con el editor web opcional (`questions ui`)
 uv tool install "questions[ui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
-# con la interfaz de terminal para revisar duplicados (`questions dedup --tui`)
+# con las interfaces de terminal (`dedup --tui`, `health --tui`, `ai --mode classify --revisar`)
 uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
+# con los proveedores de IA (Gemini y Claude) para `questions ai`
+uv tool install "questions[ai,tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"
 ```
 
 Para desarrollo:
@@ -85,11 +87,15 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions validate`: Valida archivos o directorios GIFT y Moodle XML, genera informes detallados y detecta duplicados.
 - `questions analyze stats`: Genera estadísticas completas sobre un repositorio de preguntas (por formato, tipo, categoría y tags).
 - `questions analyze similar`: Encuentra preguntas similares usando TF-IDF + Jaccard, también entre un `.gift` y un `.xml`; escala a miles de preguntas.
-- `questions dedup`: Elimina preguntas duplicadas según un umbral de similitud configurable (`-s`, por defecto 0.95), en GIFT y XML. Sólo considera duplicadas las del mismo tipo, con la misma respuesta correcta y enunciados que también superan el umbral; conserva la más completa. Simula por defecto (`--aplicar` elimina) y registra cada eliminación con la ruta completa en `dedup.log`. `--tui` abre una interfaz de terminal para revisar los grupos lado a lado y decidir cuáles eliminar (extra `tui`).
-- `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas (la correcta más larga que los distractores), código sin proteger, backticks sin cerrar, enlaces y HTML obsoleto. Separa errores de advertencias y sale con código 1 si hay errores (`--estricto`: también con advertencias).
+- `questions dedup`: Elimina preguntas duplicadas según un umbral de similitud configurable (`-s`, por defecto 0.95), en GIFT y XML. Sólo considera duplicadas las del mismo tipo, con la misma respuesta correcta y enunciados que también superan el umbral; conserva la más completa. Simula por defecto (`--aplicar` elimina) y registra cada eliminación con la ruta completa en `dedup.log`; guarda una copia de los originales y `--restaurar ultimo` lo deshace. `--confirmar-jev` confirma cada par con Jev y `--tui` abre una interfaz de terminal para revisar los grupos lado a lado y decidir cuáles eliminar (extra `tui`).
+- `questions health`: Reporte de salud del banco (archivos o directorios, GIFT y XML): claves de corrección y porcentajes que Moodle acepta, feedback general y por opción, cantidad de opciones, longitud relativa de las respuestas, señales de redacción (posición de la correcta, «todas las anteriores», negaciones sin resaltar, distractores débiles), distribución de Bloom y dificultad con el blueprint por categoría, campos de Moodle inconsistentes, código sin proteger o sin lenguaje, enlaces y HTML obsoleto. Separa errores de advertencias y sale con código 1 si hay errores (`--estricto`: también con advertencias). `--csv` exporta una fila por pregunta y `--tui` recorre los hallazgos y aplica los arreglos automáticos.
+- `questions verify`: Compila y ejecuta el código C y Java de las preguntas y avisa si la salida coincide con un distractor en lugar de la correcta, si no compila, falla o tiene comportamiento indefinido (`--sanitizar`); `--estilo` revisa el código C con las reglas de la cátedra.
 
 ### 2. Formateo y Corrección (GIFT y XML)
 - `questions format`: Estandariza el formato visual de archivos GIFT y Moodle XML (`--correct-first` ordena las opciones por porcentaje). `--fullwidth` protege el código: símbolos fullwidth, `·` en la indentación y `↵` al final de cada línea; `--normal` lo deshace. Ver [caracteres especiales](./docs/caracteres_especiales.md).
+- `questions format --check` / `--diff`: Verifican el formato sin escribir (para CI y pre-commit).
+- `questions fix code-lang`: Etiqueta el lenguaje (C o Java) de los bloques ``` que no lo tienen.
+- `questions fix code-format`: Formatea el código C y Java con clang-format.
 - `questions fix code-indent`: Marca la indentación del código con `·`.
 - `questions fix code-chars`: Convierte los caracteres del código entre normal y fullwidth.
 - `questions fix slugify`: Normaliza nombres de archivos (minúsculas, sin acentos).
@@ -113,9 +119,14 @@ El CLI `questions` se organiza en subcomandos especializados:
 - `questions xml clean-tags`: Elimina secciones de etiquetas (`<tags>`) redundantes.
 - `questions xml rename`: Renombra archivos XML basándose en el nombre interno de la pregunta.
 
-### 7. Inteligencia Artificial (Gemini)
-- `questions ai`: Mejora la calidad pedagógica (`improve`) o crea variaciones (`multiply`) de preguntas GIFT y Moodle XML usando modelos de Google Gemini. El modelo recibe GIFT compacto (sin metadatos ni marcas, código en ASCII) y la respuesta se aplica sobre el archivo original; `--dry-run` muestra lo que se enviaría y cuánto se ahorra.
-- `questions ai --mode classify`: Clasifica cada pregunta con Jev (TypeSafe): nivel de Bloom (B1–B6) y dificultad (1–5) del enunciado y de las respuestas, escritos como comentario en GIFT y XML (y como tags de Moodle con `--tags`). Requiere `TYPESAFE_API_KEY`.
+### 7. Inteligencia Artificial (Gemini o Claude)
+- `questions ai`: Mejora la calidad pedagógica (`improve`), crea variaciones (`multiply`), completa sólo la retroalimentación que falta (`feedback`) o agrega distractores donde faltan (`distractors`) en preguntas GIFT y Moodle XML, con Google Gemini o Claude (`--proveedor`). El modelo recibe GIFT compacto (sin metadatos ni marcas, código en ASCII) y la respuesta se aplica sobre el archivo original. Estima tokens y costo antes de llamar al modelo, guarda las respuestas en caché y `--dry-run` muestra lo que se enviaría.
+- `questions ai --mode classify`: Clasifica cada pregunta con Jev (TypeSafe): nivel de Bloom (B1–B6) y dificultad (1–5) del enunciado y de las respuestas, escritos como comentario en GIFT y XML (y como tags de Moodle con `--tags`). `--calibrar` mide la concordancia con una clasificación docente y `--revisar` abre una interfaz de terminal para corregir las de poca confianza. Requiere `TYPESAFE_API_KEY`.
+
+### 8. Moodle e integración
+- `questions moodle subir`: Sube un banco a un curso de Moodle por servicio web (requiere el plugin `local_questions_importer_ws` en el sitio).
+- `.questions.toml`: valores por defecto de cada comando para un banco (umbral de dedup, contexto de classify, fullwidth de format, rutas a ignorar…).
+- `--desde <rev>` procesa sólo lo cambiado desde una revisión git; hooks de [pre-commit](./.pre-commit-hooks.yaml) y una acción de GitHub (`uses: INGCOM-UNRN/moodle-toolbox@main`, ejemplo en [docs/ejemplos/salud-banco.yml](./docs/ejemplos/salud-banco.yml)) para revisar la salud de cada PR.
 
 ## 📚 Documentación Detallada
 
@@ -132,7 +143,7 @@ Para más información sobre funcionalidades específicas, consulta la carpeta [
 
 ---
 
-**Última actualización:** Mayo 2026 (Refactorización a CLI Unificado)
+**Última actualización:** Octubre 2026 (calidad del banco, verificación del código e integración con los repositorios de preguntas)
 
 <!-- p1:referencia:inicio — generado por p1-tools/scripts/readme_generado.py: no editar a mano -->
 

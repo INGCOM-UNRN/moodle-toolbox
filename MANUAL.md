@@ -55,11 +55,14 @@ questions doctor
 | Comando | Descripción Breve |
 | :--- | :--- |
 | [`questions doctor`](#doctor) | Verifica el estado del entorno de MOODLE-TOOLBOX (Python, LanguageTool, gcc y el motor de síntesis). |
-| [`questions health`](#health) | Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces. |
-| [`questions ai`](#ai) | Procesamiento de preguntas GIFT y Moodle XML usando IA (Gemini). |
+| [`questions health`](#health) | Audita la salud del banco: claves de corrección, feedback, opciones, redacción, Bloom y dificultad, código y enlaces; con TUI para arreglar. |
+| [`questions ai`](#ai) | Procesa preguntas GIFT y Moodle XML con IA (Gemini o Claude) y las clasifica por Bloom y dificultad con Jev. |
+| [`questions verify`](#verify) | Compila y ejecuta el código C y Java de las preguntas y verifica que la clave coincida con la salida. |
 | [`questions validate`](#validate) | Valida archivos o directorios de preguntas GIFT y Moodle XML. |
 | [`questions dedup`](#dedup) | Elimina preguntas duplicadas según un umbral de similitud (GIFT y Moodle XML), con log y revisión en TUI. |
-| [`questions format`](#format) | Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵). |
+| [`questions format`](#format) | Formatea archivos GIFT y Moodle XML y transforma el código (fullwidth, · y ↵); `--check` para CI. |
+| [`questions fix`](#fix) | Correcciones puntuales: lenguaje y formato del código, caracteres, nombres de archivo y títulos. |
+| [`questions moodle subir`](#moodle-subir) | Sube un banco a un curso de Moodle por servicio web. |
 | [`questions split`](#split) | Divide archivos GIFT o Moodle XML con múltiples preguntas en archivos individuales. |
 | [`questions unify`](#unify) | Unifica árboles o grupos de archivos de preguntas (GIFT o XML) en un único archivo. |
 | [`questions synth`](#synth) | daedalus en belmont: sintetiza preguntas de C verificadas con GCC. |
@@ -67,6 +70,8 @@ questions doctor
 | [`questions spellcheck`](#spellcheck) | Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool. |
 | [`questions languagetool`](#languagetool) | Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool. |
 | [`questions grammar`](#grammar) | Verifica y corrige ortografía y gramática en bancos GIFT y XML usando LanguageTool. |
+
+Todas las opciones largas en castellano aceptan también su nombre en inglés (`--aplicar`/`--apply`, `--conservar`/`--keep`, `--estricto`/`--strict`, `--desde`/`--since`, `--contexto`/`--context`…). Los comandos que escriben aceptan `-n/--dry-run`, y `health`, `format`, `validate`, `verify` y `dedup` aceptan `--desde <rev>` para procesar sólo los archivos cambiados desde una revisión git (más los nuevos sin seguimiento). Los valores por defecto de cada banco pueden fijarse en un [`.questions.toml`](#configuracion-por-banco).
 
 ### `questions doctor`
 
@@ -92,6 +97,14 @@ Audita la salud del banco sobre el modelo unificado de preguntas: **da el mismo 
 - **Longitud relativa de las respuestas:** preguntas donde la correcta es `--umbral-longitud` veces más larga (o más corta) que los distractores, y cuántas veces la correcta es la opción más larga frente a lo esperable por azar.
 - **Código:** secciones sin proteger para GIFT, marcas no canónicas (U+2007, NBSP, `;` griego) y líneas en blanco sin `↵`; backticks sin cerrar.
 - **Enlaces y HTML:** URLs `http://` o locales y etiquetas obsoletas (`<font>`, `<center>`, `style=`).
+- **Redacción (opción múltiple):** en qué posición queda la correcta (y cuántas veces es la primera frente a lo esperable), opciones como «todas/ninguna de las anteriores» (se rompen al mezclar), negaciones sin resaltar en el enunciado («excepto», «incorrecta», «no es»…) y distractores mucho más cortos que la correcta.
+- **Bloom y dificultad:** con los comentarios que escribe `ai --mode classify`, la distribución de Bloom, las dificultades medias, el blueprint categoría × Bloom y las categorías sin preguntas de niveles altos (analizar, evaluar, crear).
+- **Metadatos de Moodle (XML):** penalización, puntaje, numeración o mezcla de opciones distintos dentro de una misma categoría y tipo.
+- **Código:** además, líneas `//` dentro del código (GIFT y Moodle las descartan como comentario) y bloques ``` sin etiqueta de lenguaje.
+
+`--csv` exporta una fila por pregunta con todas sus señales (archivo, categoría, tipo, opciones y correctas, feedback, razón de longitud, fracciones inválidas, código sin cerrar, señales de redacción, Bloom y dificultades), para filtrar el banco en una planilla. Con `--json` y `--md` juntos se escriben ambos en una sola auditoría.
+
+`--tui` abre una interfaz de terminal (extra `tui`) con tres paneles: los errores y advertencias (🔧 marca los que tienen arreglo automático), las preguntas o archivos afectados y el archivo con la pregunta resaltada. `f` aplica el arreglo al archivo seleccionado y `F` a todos los del hallazgo (con confirmación): proteger el código con fullwidth y marcas, etiquetar el lenguaje de los bloques ``` o limpiar el HTML obsoleto. `e` abre el archivo en `$EDITOR` en la línea de la pregunta, `r` vuelve a auditar y `q` sale informando qué se arregló.
 
 El informe empieza con un **resultado** que separa errores de advertencias. Son errores lo que Moodle no importaría o importaría mal: archivos ilegibles, porcentajes rechazados o que no suman 100, preguntas sin respuesta correcta o sin enunciado y, en GIFT, código que el formato interpreta o con líneas en blanco. El resto (feedback, opciones, longitud, enlaces, HTML) son advertencias. **Sale con código 1 si hay errores** (con `--estricto`, también ante advertencias); el JSON lleva `ok` y `resumen`.
 
@@ -110,17 +123,35 @@ El informe empieza con un **resultado** que separa errores de advertencias. Son 
 | `--umbral-longitud` | `<class 'float'>` | `1.5` | Razón de largo correcta/distractores a partir de la cual se advierte. |
 | `--max-items` | `<class 'int'>` | `50` | Máximo de preguntas listadas por sección (0: todas). |
 | `--estricto` | `<class 'bool'>` | `False` | Salir con código 1 también ante advertencias. |
-| `--json` | `<class 'bool'>` | `False` | Emite el diagnóstico como JSON versionado. |
+| `--csv` | `Optional[pathlib.Path]` | `None` | Exportar una fila por pregunta con todas sus señales. |
+| `--tui` | `<class 'bool'>` | `False` | Recorrer los hallazgos y aplicar los arreglos en una interfaz de terminal. |
+| `--desde` | `Optional[str]` | `None` | Sólo los archivos cambiados desde esta revisión git. |
+| `-n`, `--dry-run` | `<class 'bool'>` | `False` | Con `--clean-html`: mostrar qué se limpiaría sin escribir. |
+| `--json` | `<class 'bool'>` | `False` | Emite el diagnóstico como JSON versionado (con `--md`, escribe también el informe). |
 
 #### Ejemplo de Invocación
 ```bash
 questions health banco.xml
 questions health preguntas/ -r --md salud.md
+questions health preguntas/ -r --csv preguntas.csv
+questions health preguntas/ -r --desde origin/main --estricto
+questions health preguntas/ -r --tui
 ```
 
 ### `questions ai`
 
-Procesa preguntas GIFT y Moodle XML con Gemini (`improve`, `multiply` o `transform`). El modelo siempre recibe **GIFT compacto**, el formato más corto y el que los LLM conocen mejor:
+Procesa preguntas GIFT y Moodle XML con un LLM: Gemini (por defecto) o Claude (`--proveedor claude`, o `config set-provider`; la clave con `config set-anthropic-key` o `ANTHROPIC_API_KEY`). Modos:
+
+- `improve`: mejora redacción y precisión sin cambiar el tipo ni la cantidad de opciones.
+- `multiply`: crea variaciones que evalúan lo mismo.
+- `transform`: aplica un `--prompt` propio.
+- `feedback`: completa **sólo** la retroalimentación que falta (general y por opción); el resto de la pregunta no se toca.
+- `distractors`: agrega distractores hasta `--opciones` (4 por defecto) en las preguntas que tienen menos o donde la correcta delata por su largo; no modifica los existentes.
+- `classify`: Bloom y dificultad con Jev (ver más abajo).
+
+Antes de llamar al modelo informa una estimación de tokens (y de costo, con `--precio-entrada` y `--precio-salida` en USD por millón de tokens); `--dry-run` sólo muestra eso y la primera solicitud. Las respuestas se guardan en una caché por contenido (`$XDG_CACHE_HOME/questions`): volver a correr sobre preguntas que no cambiaron no gasta tokens (`--sin-cache` la desactiva).
+
+El modelo siempre recibe **GIFT compacto**, el formato más corto y el que los LLM conocen mejor:
 
 - No se envían comentarios (`// [tag:…]`, `[id:…]`), `$CATEGORY` ni la estructura del XML; se conservan aparte.
 - El código va en ASCII normal y sin las marcas `·`/`↵` (los símbolos fullwidth cuestan más tokens); la respuesta se vuelve a proteger y cada archivo recupera la convención de su original.
@@ -148,6 +179,10 @@ Jev recibe la pregunta como JSON (contexto del curso, tipo, enunciado y opciones
 
 Las preguntas ya clasificadas se saltean (`--reclasificar` las reemplaza, sin duplicar la línea); `--tags` agrega además los tags de Moodle `bloom:…`, `dificultad-enunciado:N` y `dificultad-respuestas:N`, que se conservan al importar y permiten filtrar el banco. Al terminar informa la distribución de Bloom, las dificultades medias, cuántas preguntas tuvieron baja confianza y los tokens usados (≈1300 de entrada por pregunta). La clave `TYPESAFE_API_KEY` se toma del entorno, de `.env.local`, de `~/.env` o de `questions config set-typesafe-key`.
 
+**Calibración.** `--calibrar referencias.csv` (columnas `archivo,titulo,bloom[,dificultad_enunciado,dificultad_respuestas]`, hecho por docentes) clasifica esas preguntas con Jev sin escribir nada y mide la concordancia: acuerdo exacto y a ±1 nivel de Bloom, kappa de Cohen, matriz de confusión y error medio de las dificultades. Sirve para ajustar `--contexto` antes de clasificar todo el banco.
+
+**Revisión.** `--revisar` abre una interfaz de terminal (extra `tui`) con las preguntas clasificadas con alguna confianza menor que `--umbral-revision` (0.6), de la menos a la más confiable, junto a la escala de Bloom. `1`–`6` elige el nivel, `+`/`-` ajusta la dificultad del enunciado, `a` acepta la del modelo, `u` deshace y `s` guarda: cada corrección reemplaza el comentario con clasificador `manual` (que `--reclasificar` no pisa) y, con `--referencias`, se agrega al CSV de calibración.
+
 #### Opciones y Banderas
 | Opción / Banderas | Tipo | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
@@ -166,12 +201,24 @@ Las preguntas ya clasificadas se saltean (`--reclasificar` las reemplaza, sin du
 | `--concurrencia` | `<class 'int'>` | `4` | classify: solicitudes simultáneas a Jev. |
 | `--reclasificar` | `<class 'bool'>` | `False` | classify: volver a clasificar las ya clasificadas. |
 | `--tags` | `<class 'bool'>` | `False` | classify: escribir también tags de Moodle (bloom:…, dificultad-…). |
+| `--proveedor` | `Optional[str]` | configurado o `gemini` | `gemini` o `claude`. |
+| `--opciones` | `<class 'int'>` | `4` | distractors: cantidad de opciones a alcanzar. |
+| `--precio-entrada`, `--precio-salida` | `Optional[float]` | `None` | USD por millón de tokens, para estimar el costo. |
+| `--sin-cache` | `<class 'bool'>` | `False` | No usar ni guardar respuestas en la caché. |
+| `--calibrar` | `Optional[pathlib.Path]` | `None` | classify: comparar con una referencia CSV sin escribir nada. |
+| `--revisar` | `<class 'bool'>` | `False` | classify: revisar en una TUI las clasificaciones con poca confianza. |
+| `--umbral-revision` | `<class 'float'>` | `0.6` | classify --revisar: confianza por debajo de la cual se pide revisar. |
+| `--referencias` | `Optional[pathlib.Path]` | `None` | classify --revisar: CSV al que se agregan las correcciones. |
 
 #### Ejemplo de Invocación
 ```bash
 questions ai banco.xml --dry-run
 questions ai preguntas/ -r --mode multiply --output variaciones/
 questions ai preguntas/ -r --mode classify -i --tags --contexto "Programación 1 (C), primer año"
+questions ai preguntas/ -r --mode feedback -i --precio-entrada 3 --precio-salida 15 --dry-run
+questions ai preguntas/ -r --mode distractors --proveedor claude -i
+questions ai preguntas/ -r --mode classify --calibrar referencias.csv
+questions ai preguntas/ -r --mode classify --revisar --referencias referencias.csv
 ```
 
 ### `questions validate`
@@ -188,6 +235,7 @@ Valida archivos o directorios de preguntas GIFT y Moodle XML: errores de parseo,
 | `-v`, `--verbose` | `<class 'bool'>` | `False` | Información detallada |
 | `-s`, `--similarity` | `<class 'float'>` | `0.85` | Threshold para duplicados |
 | `-j`, `--json` | `<class 'bool'>` | `False` | Salida en JSON |
+| `--desde` | `Optional[str]` | `None` | Sólo los archivos cambiados desde esta revisión git. |
 
 #### Ejemplo de Invocación
 ```bash
@@ -202,6 +250,10 @@ De cada grupo se conserva la más completa (feedback, título, opciones) o la pr
 
 **Por defecto sólo simula**; `--aplicar` elimina y agrega a `--log` (TSV, `dedup.log` por defecto) una línea por pregunta eliminada: fecha, acción (`archivo-borrado` o `pregunta-quitada`), ruta completa del archivo eliminado y del conservado (las categorías se infieren de ellas), similitud, umbral, tipo y título.
 
+Antes de tocar nada, `--aplicar` guarda una copia completa de cada archivo que modifica o borra en `--respaldo/<fecha>/` (`dedup-respaldos/` por defecto, con un manifiesto). `--restaurar ultimo` (o el nombre de un respaldo) lo deshace: devuelve los archivos a su contenido original y recrea los borrados, pero no pisa uno editado después del dedup (lo informa y sale con 1; `--forzar` lo pisa igual).
+
+`--confirmar-jev` consulta a Jev por cada par y descarta los que no evalúan exactamente lo mismo (útil con umbrales bajos); los pares casi idénticos no se consultan. Con `--desde <rev>` se compara contra todo el banco pero sólo se informan los grupos donde aparece una pregunta cambiada: «¿mi pregunta nueva duplica una existente?».
+
 `--tui` abre una interfaz de terminal (extra `tui`): grupos a la izquierda y, a la derecha, la pregunta que se conserva y el duplicado en revisión lado a lado, con las palabras que difieren resaltadas. Teclas: `→`/`←` recorren los duplicados del grupo, `d` alterna eliminar/conservar, `p` conserva el duplicado en lugar de la principal, `c` conserva todo el grupo, `a` aplica (pide confirmación y escribe el log), `q` sale sin cambios.
 
 #### Opciones y Banderas
@@ -213,6 +265,11 @@ De cada grupo se conserva la más completa (feedback, título, opciones) o la pr
 | `--conservar` | `<class 'str'>` | `completa` | Cuál se conserva de cada grupo: la más completa o la primera. |
 | `--aplicar` | `<class 'bool'>` | `False` | Eliminar de verdad (sin esta opción sólo se muestra lo que se eliminaría). |
 | `--log` | `<class 'pathlib.Path'>` | `dedup.log` | Con --aplicar, log (TSV, se agrega al final) de cada pregunta eliminada con las rutas completas. |
+| `--respaldo` | `<class 'pathlib.Path'>` | `dedup-respaldos` | Con --aplicar, directorio para la copia completa de cada archivo modificado o borrado. |
+| `--restaurar` | `Optional[str]` | `None` | Deshacer un dedup: `ultimo` o el nombre de un respaldo. |
+| `--forzar` | `<class 'bool'>` | `False` | Con --restaurar, pisar también los archivos editados después. |
+| `--confirmar-jev` | `<class 'bool'>` | `False` | Confirmar cada par con Jev. |
+| `--desde` | `Optional[str]` | `None` | Sólo los grupos con alguna pregunta cambiada desde esta revisión git. |
 | `--tui` | `<class 'bool'>` | `False` | Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar. |
 | `--json` | `<class 'bool'>` | `False` | Emite los grupos de duplicados como JSON versionado. |
 
@@ -221,6 +278,8 @@ De cada grupo se conserva la más completa (feedback, título, opciones) o la pr
 questions dedup preguntas/ -r -s 0.9
 questions dedup preguntas/ -r -s 0.9 --aplicar
 questions dedup preguntas/ -r -s 0.85 --tui
+questions dedup preguntas/ -r -s 0.8 --confirmar-jev
+questions dedup --restaurar ultimo
 ```
 
 ### `questions format`
@@ -241,11 +300,51 @@ Las transformaciones de código son las mismas en ambos formatos (ver [caractere
 | `--normal` | `<class 'bool'>` | `False` | Restaurar el código a caracteres normales (sin marcas) |
 | `--marcas/--sin-marcas` | `<class 'bool'>` | `True` | Con --fullwidth, agregar las marcas · y ↵. |
 | `--correct-first` | `<class 'bool'>` | `False` | Ordena las opciones de opción múltiple por porcentaje (la correcta primero). |
+| `--check` | `<class 'bool'>` | `False` | No escribir: salir con 1 si algún archivo cambiaría (CI y pre-commit). |
+| `--diff` | `<class 'bool'>` | `False` | No escribir: mostrar los cambios como diff unificado. |
+| `--desde` | `Optional[str]` | `None` | Sólo los archivos cambiados desde esta revisión git. |
+| `--json` | `<class 'bool'>` | `False` | Emite los archivos que cambian y los errores como JSON versionado. |
 
 #### Ejemplo de Invocación
 ```bash
 questions format preguntas/ -r --fullwidth
 questions format banco.xml --correct-first
+questions format preguntas/ -r --check --desde origin/main
+```
+
+### `questions verify`
+
+Compila y ejecuta el código C (gcc, `-std=gnu11`) y Java (javac/java) de las preguntas que preguntan por la salida de un programa y compara lo que imprime con la respuesta correcta (exacta, ignorando espacios o por palabras). Informa:
+
+- `coincide_distractor`: la salida coincide con un distractor y no con la correcta (la clave está mal);
+- `no_compila`, `error_ejecucion`, `tiempo` (no termina) y `comportamiento_indefinido` (con `--sanitizar`, AddressSanitizer y UBSan);
+- por defecto sólo verifica las preguntas que piden la salida del programa; `--todas` intenta con toda pregunta que tenga código. Las que usan archivos o la entrada estándar, los fragmentos que no compilan solos y las salidas que no aparecen literalmente en las opciones quedan como `revisar` (para una persona; no cuentan como problema).
+
+`--estilo` revisa además el código C con las reglas de estilo de la cátedra (ripley, instalado aparte). Sale con código 1 si hay problemas.
+
+#### Ejemplo de Invocación
+```bash
+questions verify preguntas/ -r --solo-problemas
+questions verify preguntas/ -r --sanitizar --estilo --json
+```
+
+### `questions fix`
+
+Correcciones puntuales, en GIFT, Moodle XML y Markdown; todas aceptan `-r` y `-n/--dry-run`:
+
+- `fix code-lang`: agrega la etiqueta de lenguaje a los bloques ``` que no la tienen (detecta C o Java; `--lenguaje` fija uno).
+- `fix code-format`: formatea el código C y Java con clang-format (el instalado o `uvx clang-format`), estilo LLVM con sangría de 4 (`--estilo` para otro).
+- `fix code-chars --to-fullwidth|--to-normal` y `fix code-indent`: caracteres fullwidth y marcas del código.
+- `fix slugify`, `fix name-from-title`, `fix title-from-name`: nombres de archivo y títulos.
+
+### `questions moodle subir`
+
+Sube un banco a un curso de Moodle por servicio web. Moodle estándar no tiene un servicio para importar preguntas: hace falta el plugin local **Question Web Service Import** (`local_questions_importer_ws`) en el sitio y un token de un usuario que pueda importar preguntas en el curso. El comando convierte y unifica los GIFT/XML indicados (las carpetas se vuelven categorías), sube el Moodle XML al área de borradores con `webservice/upload.php` y lo importa con `local_questions_importer_ws_import_xml`. Con un curso de prueba sirve para probar la importación contra el Moodle real.
+
+`--url` (o `MOODLE_URL`), `--curso` (id) y el token por `--token`, `MOODLE_TOKEN` o `questions config set-moodle-token`. `--dry-run` prepara el XML sin contactar al sitio y `--guardar` conserva el XML que se sube.
+
+```bash
+questions moodle subir preguntas/ --url https://moodle.ejemplo.edu.ar --curso 1234 --dry-run
 ```
 
 ### `questions split`
@@ -423,6 +522,65 @@ Por defecto, la herramienta renderiza paneles, árboles y tablas estilizadas par
 Para integración con pipelines de CI/CD, scripts de automatización u orquestadores externos, la opción `--json` emite un documento JSON estricto por la salida estándar (`stdout`), dirigiendo cualquier mensaje de logging a `stderr`:
 ```bash
 questions doctor --json
+```
+
+<a id="configuracion-por-banco"></a>
+### Configuración por banco (`.questions.toml`)
+
+En la raíz del repositorio de preguntas, un `.questions.toml` fija los valores por defecto de cada comando (una opción en la línea de comandos siempre gana). Se busca subiendo desde la ruta indicada hasta la raíz del repositorio git.
+
+```toml
+[general]
+ignorar = ["borradores/**", "*.bak.xml"]   # rutas que ningún comando procesa
+
+[ai]
+contexto = "Programación 1 (C), primer año"
+proveedor = "claude"
+opciones = 4
+
+[dedup]
+umbral = 0.9
+conservar = "completa"
+
+[health]
+min_opciones = 4
+umbral_longitud = 1.5
+
+[format]
+fullwidth = true
+marcas = true
+```
+
+### pre-commit y acción de GitHub
+
+El repositorio publica hooks de [pre-commit](https://pre-commit.com) (`questions-format`, `questions-health`, `questions-health-estricto`, `questions-validate`), que reciben sólo los `.gift`/`.xml` del commit:
+
+```yaml
+repos:
+  - repo: https://github.com/INGCOM-UNRN/moodle-toolbox
+    rev: <etiqueta o commit>
+    hooks:
+      - id: questions-format
+      - id: questions-health
+```
+
+Y una acción de GitHub que corre `health` sobre lo que cambia en un pull request (respecto de su base, con `fetch-depth: 0`), publica el informe en el resumen del job y como comentario del PR, expone `ok`, `errores` y `advertencias`, y falla ante errores (o advertencias, con `estricto: true`). Ejemplo completo en `docs/ejemplos/salud-banco.yml`:
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0
+- uses: INGCOM-UNRN/moodle-toolbox@main
+  with:
+    rutas: preguntas
+```
+
+### Pruebas sobre bancos reales
+
+`tests/test_corpus.py` verifica invariantes (format no cambia las preguntas y es idempotente, la conversión GIFT ↔ XML no las parte ni las pierde, unify y tree export tampoco, health es consistente) sobre un corpus sintético en cada corrida. Las mismas verificaciones corren sobre bancos reales, que sólo se leen, sin copiarlos al repositorio:
+
+```bash
+QUESTIONS_BANCOS=/ruta/banco1:/ruta/banco2 uv run pytest tests/test_corpus.py
 ```
 
 ### Integración con Dredd (`dredd-section`)
