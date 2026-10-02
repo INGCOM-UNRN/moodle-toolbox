@@ -304,3 +304,6 @@ pip-delete-this-directory.txt
 # Instalación local de paquetes
 .Python
 env/
+
+# Respaldos de questions dedup --aplicar
+dedup-respaldos/

@@ -107,7 +107,8 @@ def test_cli_simula_por_defecto_y_aplica_con_log(tmp_path):
     res = runner.invoke(cli, ["dedup", str(raiz), "-r", "-s", "0.9", "--log", str(log)])
     assert res.exit_code == 0, res.output
     assert "Se eliminarían 1" in res.output and (raiz / "u2" / "b.gift").exists() and not log.exists()
-    res = runner.invoke(cli, ["dedup", str(raiz), "-r", "-s", "0.9", "--log", str(log), "--aplicar", "--json"])
+    res = runner.invoke(cli, ["dedup", str(raiz), "-r", "-s", "0.9", "--log", str(log), "--aplicar", "--json",
+                              "--respaldo", str(tmp_path / "respaldos")])
     datos = json.loads(res.output)
     assert datos["eliminadas"] == 1 and datos["log"] == str(log.resolve())
     assert datos["grupos"][0]["elimina"][0]["archivo"].endswith("b.gift")
@@ -137,7 +138,7 @@ def _tui(raiz, log, teclas):
     from questions.tui.dedup import DedupApp
 
     archivos, unidades = _leer(raiz)
-    app = DedupApp(archivos, Revision(agrupar(unidades, 0.9)), 0.9, log)
+    app = DedupApp(archivos, Revision(agrupar(unidades, 0.9)), 0.9, log, log.parent / "respaldos")
 
     async def correr():
         async with app.run_test(size=(140, 40)) as pilot:
@@ -155,6 +156,7 @@ def test_tui_decide_y_aplica_con_confirmacion(tmp_path):
     # Conservar el duplicado que se ve (b) y aplicar: sólo se elimina c.
     resultado = _tui(raiz, log, ["d", "a", "s"])
     assert resultado["eliminadas"] == 1
+    assert (resultado["respaldo"] / "manifiesto.json").is_file()
     assert (raiz / "a.gift").exists() and (raiz / "b.gift").exists() and not (raiz / "c.gift").exists()
     assert str((raiz / "c.gift").resolve()) in log.read_text(encoding="utf-8")
 
@@ -193,3 +195,30 @@ def test_confirmar_con_jev_descarta_los_que_piden_otra_cosa(tmp_path):
     assert descartados[0]["descartado"].endswith("c.gift") and descartados[0]["probabilidad"] == 0.1
     assert set(cliente.estados[0]) == {"pregunta_a", "pregunta_b"}
     assert "Bien" not in str(cliente.estados[0])  # sin feedback
+
+
+def test_respaldo_y_restaurar(tmp_path):
+    raiz = _banco(tmp_path, {
+        "u1/a.gift": COMPLETA,
+        "u2/b.gift": PREGUNTA.format(n=""),
+        "u3/multi.gift": PREGUNTA.format(n="") + "\n::Otra:: ¿Cuánto es 3+3? {=6 ~5 ~7}\n",
+    })
+    originales = {p: p.read_bytes() for p in raiz.rglob("*.gift")}
+    respaldos = tmp_path / "respaldos"
+    opciones = ["-s", "0.9", "--log", str(tmp_path / "log"), "--respaldo", str(respaldos)]
+    datos = json.loads(runner.invoke(cli, ["dedup", str(raiz), "-r", "--aplicar", "--json"] + opciones).output)
+    assert not (raiz / "u2" / "b.gift").exists() and "Punteros" not in (raiz / "u3" / "multi.gift").read_text(encoding="utf-8")
+    manifiesto = json.loads((Path(datos["respaldo"]) / "manifiesto.json").read_text(encoding="utf-8"))
+    assert {Path(e["ruta"]).name: e["accion"] for e in manifiesto["archivos"]} == {"b.gift": "borrado", "multi.gift": "modificado"}
+
+    # Un archivo editado después del dedup no se pisa sin --forzar.
+    (raiz / "u3" / "multi.gift").write_text("::Otra:: editada {T}\n", encoding="utf-8")
+    res = runner.invoke(cli, ["dedup", "--restaurar", "ultimo"] + opciones)
+    assert res.exit_code == 1 and "multi.gift: cambió después del dedup" in res.output
+    assert (raiz / "u2" / "b.gift").read_bytes() == originales[raiz / "u2" / "b.gift"]
+    res = runner.invoke(cli, ["dedup", "--restaurar", Path(datos["respaldo"]).name, "--forzar", "--json"] + opciones)
+    assert res.exit_code == 0 and len(json.loads(res.output)["sin_cambios"]) == 1
+    assert {p: p.read_bytes() for p in raiz.rglob("*.gift")} == originales
+
+    res = runner.invoke(cli, ["dedup", "--restaurar", "no-existe"] + opciones)
+    assert res.exit_code == 1 and "Disponibles" in res.output

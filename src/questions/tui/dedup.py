@@ -115,8 +115,10 @@ class DedupApp(App):
         Binding("q", "salir", "Salir sin cambios"),
     ]
 
-    def __init__(self, archivos: List[Archivo], revision: Revision, umbral: float, log: Path):
+    def __init__(self, archivos: List[Archivo], revision: Revision, umbral: float, log: Path,
+                 respaldo: Optional[Path] = None):
         super().__init__()
+        self.respaldo = respaldo
         self.archivos = archivos
         self.revision = revision
         self.umbral = umbral
@@ -234,7 +236,7 @@ class DedupApp(App):
             if not confirmado:
                 return
             grupos = self.revision.grupos()
-            cambios = aplicar(self.archivos, grupos)
+            cambios = aplicar(self.archivos, grupos, self.respaldo)
             registrar(grupos, cambios, self.ruta_log, self.umbral)
             self.exit({"eliminadas": cantidad, **cambios})
 

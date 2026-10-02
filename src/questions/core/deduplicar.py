@@ -17,13 +17,15 @@ preceden. Un archivo que queda sin preguntas se borra.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from questions.core.ai import Archivo, Unidad
 from questions.core.codigo import transformar_codigo
@@ -147,21 +149,98 @@ def escribir(archivo: Archivo, segmentos: list) -> str:
     return serializar_quiz(quiz)
 
 
-def aplicar(archivos: List[Archivo], grupos: List[Grupo]) -> Dict[str, List[Path]]:
-    """Elimina las duplicadas de los archivos. Devuelve los archivos modificados y borrados."""
+def aplicar(archivos: List[Archivo], grupos: List[Grupo], respaldo: Optional[Path] = None) -> Dict[str, Any]:
+    """Elimina las duplicadas de los archivos. Devuelve los archivos modificados y borrados.
+
+    Con `respaldo` (un directorio de respaldos), antes de tocar nada copia el contenido
+    original de cada archivo afectado a un subdirectorio nuevo, para `restaurar` después;
+    el resultado lleva entonces `respaldo` con la ruta de ese subdirectorio.
+    """
     eliminadas = {id(u) for g in grupos for u, _ in g.duplicadas}
-    modificados, borrados = [], []
-    for archivo in archivos:
-        if not any(isinstance(s, Unidad) and id(s) in eliminadas for s in archivo.segmentos):
-            continue
+    afectados = [a for a in archivos if any(isinstance(s, Unidad) and id(s) in eliminadas for s in a.segmentos)]
+    nuevos = {}
+    for archivo in afectados:
         segmentos = sin_eliminadas(archivo, eliminadas)
-        if _queda_vacio(segmentos):
+        nuevos[id(archivo)] = None if _queda_vacio(segmentos) else escribir(archivo, segmentos)
+    destino = _respaldar(afectados, nuevos, respaldo) if respaldo is not None and afectados else None
+
+    modificados, borrados = [], []
+    for archivo in afectados:
+        contenido = nuevos[id(archivo)]
+        if contenido is None:
             archivo.ruta.unlink()
             borrados.append(archivo.ruta)
         else:
-            archivo.ruta.write_text(escribir(archivo, segmentos), encoding="utf-8")
+            archivo.ruta.write_text(contenido, encoding="utf-8")
             modificados.append(archivo.ruta)
-    return {"modificados": modificados, "borrados": borrados}
+    return {"modificados": modificados, "borrados": borrados, **({"respaldo": destino} if destino else {})}
+
+
+MANIFIESTO = "manifiesto.json"
+
+
+def _huella(datos: bytes) -> str:
+    return hashlib.sha256(datos).hexdigest()
+
+
+def _respaldar(afectados: List[Archivo], nuevos: dict, raiz: Path) -> Path:
+    """Copia los originales a raiz/<fecha>/ con un manifiesto: ruta absoluta, copia,
+    acción y la huella de lo que dedup dejó (para no pisar cambios posteriores)."""
+    fecha = datetime.now().strftime("%Y%m%d-%H%M%S")
+    destino = raiz / fecha
+    n = 1
+    while destino.exists():
+        n += 1
+        destino = raiz / f"{fecha}-{n}"
+    (destino / "archivos").mkdir(parents=True)
+    entradas = []
+    for i, archivo in enumerate(afectados, 1):
+        original = archivo.ruta.read_bytes()
+        copia = Path("archivos") / f"{i:04d}-{archivo.ruta.name}"
+        (destino / copia).write_bytes(original)
+        contenido = nuevos[id(archivo)]
+        entradas.append({
+            "ruta": str(archivo.ruta.resolve()),
+            "copia": copia.as_posix(),
+            "accion": "borrado" if contenido is None else "modificado",
+            "huella_original": _huella(original),
+            "huella_despues": None if contenido is None else _huella(contenido.encode("utf-8")),
+        })
+    manifiesto = {"fecha": datetime.now().isoformat(timespec="seconds"), "archivos": entradas}
+    (destino / MANIFIESTO).write_text(json.dumps(manifiesto, ensure_ascii=False, indent=2), encoding="utf-8")
+    return destino
+
+
+def respaldos(raiz: Path) -> List[Path]:
+    """Los respaldos de `raiz`, del más viejo al más nuevo."""
+    if not raiz.is_dir():
+        return []
+    return sorted(d for d in raiz.iterdir() if (d / MANIFIESTO).is_file())
+
+
+def restaurar(respaldo: Path, forzar: bool = False) -> Dict[str, List[str]]:
+    """Devuelve los archivos de un respaldo a su contenido original.
+
+    No pisa un archivo que cambió después de dedup (salvo `forzar`): lo informa en
+    `cambiados`. Los que ya tienen el contenido original van a `sin_cambios`.
+    """
+    manifiesto = json.loads((respaldo / MANIFIESTO).read_text(encoding="utf-8"))
+    resultado: Dict[str, List[str]] = {"restaurados": [], "sin_cambios": [], "cambiados": []}
+    for entrada in manifiesto["archivos"]:
+        ruta = Path(entrada["ruta"])
+        actual = ruta.read_bytes() if ruta.exists() else None
+        if actual is not None and _huella(actual) == entrada["huella_original"]:
+            resultado["sin_cambios"].append(str(ruta))
+            continue
+        esperado = entrada["huella_despues"]
+        tocado = (actual is not None) if esperado is None else (actual is None or _huella(actual) != esperado)
+        if tocado and not forzar:
+            resultado["cambiados"].append(str(ruta))
+            continue
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_bytes((respaldo / entrada["copia"]).read_bytes())
+        resultado["restaurados"].append(str(ruta))
+    return resultado
 
 
 def plan(archivos: List[Archivo], grupos: List[Grupo]) -> Dict[str, List[Path]]:

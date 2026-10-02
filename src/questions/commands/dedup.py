@@ -11,7 +11,7 @@ import typer
 from questions.commands.common import LLM_OPTION, con_configuracion, emitir_json, fail
 from questions.core.ai import leer_archivos, unidades_de
 from questions.core.banco import archivos_cambiados, expandir_rutas
-from questions.core.deduplicar import CRITERIOS, a_json, agrupar, aplicar, plan, registrar
+from questions.core.deduplicar import CRITERIOS, a_json, agrupar, aplicar, plan, registrar, respaldos, restaurar
 
 
 def dedup(
@@ -40,6 +40,15 @@ def dedup(
     ),
     desde: Optional[str] = typer.Option(
         None, "--desde", "--since", help="Sólo los archivos cambiados desde esta revisión git (y los nuevos sin seguimiento)."),
+    respaldo: Path = typer.Option(
+        Path("dedup-respaldos"), "--respaldo", "--backup-dir",
+        help="Con --aplicar, directorio donde se guarda una copia completa de cada archivo modificado o borrado.",
+    ),
+    restaurar_id: Optional[str] = typer.Option(
+        None, "--restaurar", "--restore", metavar="RESPALDO",
+        help="Deshacer un dedup: 'ultimo' o el nombre de un respaldo de --respaldo (no pisa archivos editados después).",
+    ),
+    forzar: bool = typer.Option(False, "--forzar", "--force", help="Con --restaurar, pisar también los archivos editados después."),
     tui: bool = typer.Option(
         False, "--tui", help="Revisar los grupos en una interfaz de terminal y decidir cuáles eliminar (extra 'tui').",
     ),
@@ -52,6 +61,9 @@ def dedup(
     muestra lo que haría. Al aplicar, cada eliminación queda en --log con la ruta
     completa del archivo (de ella se infieren las categorías).
     """
+    if restaurar_id:
+        _restaurar(respaldo, restaurar_id, forzar, output_json)
+        return
     opciones = con_configuracion(ctx, paths, "dedup", {"similarity": (similarity, "umbral"), "conservar": conservar})
     similarity, conservar = float(opciones["similarity"]), opciones["conservar"]
     archivos_rutas = expandir_rutas(paths or [Path(".")], recursive)
@@ -98,15 +110,17 @@ def dedup(
                  'uv tool install "questions[tui] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"')
         from questions.core.deduplicar import Revision
 
-        resultado = DedupApp(archivos, Revision(grupos), similarity, log).run()
+        resultado = DedupApp(archivos, Revision(grupos), similarity, log, respaldo).run()
         if resultado:
             click.echo(f"Se eliminaron {resultado['eliminadas']} preguntas ({len(resultado['modificados'])} archivos "
                        f"modificados, {len(resultado['borrados'])} borrados). Registro: {log.resolve()}")
+            if resultado.get("respaldo"):
+                click.echo(f"Respaldo: {resultado['respaldo']} (deshacer: questions dedup --restaurar ultimo)")
         else:
             click.echo("No se eliminó nada.")
         return
 
-    cambios = aplicar(archivos, grupos) if aplicar_cambios else plan(archivos, grupos)
+    cambios = aplicar(archivos, grupos, respaldo) if aplicar_cambios else plan(archivos, grupos)
     eliminadas = sum(len(g.duplicadas) for g in grupos)
     registradas = registrar(grupos, cambios, log, similarity) if aplicar_cambios else 0
 
@@ -120,6 +134,7 @@ def dedup(
             "archivos_modificados": [str(r) for r in cambios["modificados"]],
             "archivos_borrados": [str(r) for r in cambios["borrados"]],
             **({"log": str(log.resolve())} if registradas else {}),
+            **({"respaldo": str(cambios["respaldo"])} if cambios.get("respaldo") else {}),
             **({"descartados_jev": descartados} if confirmar_jev else {}),
         })
         return
@@ -139,3 +154,29 @@ def dedup(
         click.echo("Simulación: no se modificó nada. Usá --aplicar para eliminarlas.")
     elif registradas:
         click.echo(f"Registro de las eliminaciones: {log.resolve()}")
+    if cambios.get("respaldo"):
+        click.echo(f"Respaldo de los originales: {cambios['respaldo']} (deshacer: questions dedup --restaurar ultimo)")
+
+
+def _restaurar(raiz: Path, nombre: str, forzar: bool, output_json: bool) -> None:
+    disponibles = respaldos(raiz)
+    if not disponibles:
+        fail(f"No hay respaldos en {raiz.resolve()}.")
+    if nombre in ("ultimo", "último", "latest"):
+        elegido = disponibles[-1]
+    else:
+        elegido = next((d for d in disponibles if d.name == nombre), None)
+        if elegido is None:
+            fail(f"No existe el respaldo {nombre!r}. Disponibles: {', '.join(d.name for d in disponibles)}")
+    resultado = restaurar(elegido, forzar)
+    if output_json:
+        emitir_json("dedup restaurar", {"respaldo": str(elegido), **resultado})
+    else:
+        for ruta in resultado["restaurados"]:
+            click.echo(f"↺ {ruta}")
+        for ruta in resultado["cambiados"]:
+            click.echo(f"⚠ {ruta}: cambió después del dedup; no se restauró (usá --forzar para pisarlo).")
+        click.echo(f"Restaurados {len(resultado['restaurados'])} archivos desde {elegido}"
+                   + (f"; {len(resultado['sin_cambios'])} ya estaban como antes." if resultado["sin_cambios"] else "."))
+    if resultado["cambiados"]:
+        raise typer.Exit(1)

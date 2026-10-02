@@ -211,7 +211,8 @@ def test_alias_en_ingles_funcionan(tmp_path):
     (banco / "b.gift").write_text(pregunta, encoding="utf-8")
     res = runner.invoke(cli, ["health", str(banco), "--strict", "--json"])
     assert res.exit_code == 1 and json.loads(res.output)["resumen"]["total_advertencias"] > 0
-    res = runner.invoke(cli, ["dedup", str(banco), "-s", "0.9", "--apply", "--keep", "primera", "--log", str(tmp_path / "l")])
+    res = runner.invoke(cli, ["dedup", str(banco), "-s", "0.9", "--apply", "--keep", "primera", "--log", str(tmp_path / "l"),
+                                 "--backup-dir", str(tmp_path / "r")])
     assert res.exit_code == 0 and (banco / "a.gift").exists() and not (banco / "b.gift").exists()
 
 
