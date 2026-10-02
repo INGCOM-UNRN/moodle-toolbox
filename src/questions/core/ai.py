@@ -34,7 +34,7 @@ except ImportError:
 
 from questions.core.cache import Cache
 from questions.core.codigo import transformar_codigo, usa_convencion
-from questions.core.config import get_api_key, get_model  # noqa: F401 - get_model lo usa el comando
+from questions.core.config import get_anthropic_key, get_api_key, get_model
 from questions.core.converter import question_to_gift
 from questions.core.formatter import _bloques_gift, format_gift_content
 from questions.core.gift_model import Question
@@ -44,6 +44,67 @@ from questions.core.tree import serializar_quiz
 
 TIPOS_PROCESABLES = ("MC", "Short", "TF", "Matching", "Numerical", "Essay", "Description")
 VARIACIONES = 3
+
+
+MODELO_CLAUDE = "claude-opus-5"
+PROVEEDORES = ("gemini", "claude")
+
+
+class ClienteClaude:
+    """Claude (Anthropic) con la interfaz que usa el procesamiento por lotes:
+    `cliente.models.generate_content(model=…, contents=…).text`.
+
+    Usa el SDK oficial con los reintentos propios del SDK (429, 5xx y errores de red) y
+    el fallback del servidor ante una negativa por política (`fallbacks="default"`): si
+    el modelo declina, la API reintenta en otro modelo dentro de la misma llamada. Si
+    aun así la respuesta es una negativa, el lote falla y sus preguntas quedan como
+    estaban.
+    """
+
+    def __init__(self, cliente=None, max_tokens: int = 16000):
+        if cliente is None:
+            try:
+                import anthropic
+            except ImportError:
+                raise ImportError(
+                    "El paquete 'anthropic' no está instalado: `questions ai --proveedor claude` requiere el extra "
+                    'opcional ai. Instalalo con: uv tool install "questions[ai] @ git+https://github.com/INGCOM-UNRN/moodle-toolbox"'
+                ) from None
+            clave = get_anthropic_key()
+            cliente = anthropic.Anthropic(api_key=clave, max_retries=5) if clave else anthropic.Anthropic(max_retries=5)
+        self._cliente = cliente
+        self.max_tokens = max_tokens
+        self.models = self
+
+    def generate_content(self, model: str, contents: str):
+        respuesta = self._cliente.beta.messages.create(
+            model=model,
+            max_tokens=self.max_tokens,
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            messages=[{"role": "user", "content": contents}],
+        )
+        if respuesta.stop_reason == "refusal":
+            categoria = getattr(getattr(respuesta, "stop_details", None), "category", None)
+            raise RuntimeError(f"el modelo declinó el lote (categoría: {categoria or 'sin dato'})")
+        texto = "".join(b.text for b in respuesta.content if getattr(b, "type", "") == "text")
+        return _Respuesta(texto)
+
+
+@dataclass
+class _Respuesta:
+    text: str
+
+
+def cargar_cliente(proveedor: str):
+    """El cliente del proveedor pedido (gemini o claude)."""
+    if proveedor == "claude":
+        return ClienteClaude()
+    return load_config()
+
+
+def modelo_por_defecto(proveedor: str) -> str:
+    return MODELO_CLAUDE if proveedor == "claude" else get_model()
 
 
 def load_config():

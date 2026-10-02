@@ -290,3 +290,45 @@ def test_necesita_distractores():
     assert not ai.necesita_distractores(modelo("::A:: q {=a ~b ~c ~d}"), 4)
     assert ai.necesita_distractores(modelo("::A:: q {=a ~b ~c}"), 4)
     assert ai.necesita_distractores(modelo("::A:: q {=una respuesta muy larga y detallada ~b ~c ~d}"), 4)
+
+
+class _SDKFalso:
+    """Imita client.beta.messages.create del SDK de Anthropic."""
+
+    def __init__(self, stop_reason="end_turn", bloques=None):
+        self.llamadas = []
+        self.stop_reason = stop_reason
+        self.bloques = bloques if bloques is not None else [
+            types.SimpleNamespace(type="thinking", thinking=""),
+            types.SimpleNamespace(type="text", text="--- PREGUNTA 1 ---\n"),
+            types.SimpleNamespace(type="text", text="::A:: ¿Sí? {T}"),
+        ]
+        self.beta = types.SimpleNamespace(messages=types.SimpleNamespace(create=self._crear))
+
+    def _crear(self, **kwargs):
+        self.llamadas.append(kwargs)
+        return types.SimpleNamespace(stop_reason=self.stop_reason, content=self.bloques,
+                                     stop_details=types.SimpleNamespace(category="cyber"))
+
+
+def test_cliente_claude_usa_el_sdk_con_fallback_y_junta_el_texto():
+    sdk = _SDKFalso()
+    cliente = ai.ClienteClaude(cliente=sdk)
+    respuesta = cliente.models.generate_content(model="claude-opus-5", contents="prompt")
+    assert respuesta.text == "--- PREGUNTA 1 ---\n::A:: ¿Sí? {T}"
+    llamada = sdk.llamadas[0]
+    assert llamada["model"] == "claude-opus-5" and llamada["max_tokens"] == 16000
+    assert llamada["betas"] == ["server-side-fallback-2026-07-01"] and llamada["fallbacks"] == "default"
+    assert llamada["messages"] == [{"role": "user", "content": "prompt"}]
+
+
+def test_cliente_claude_ante_una_negativa_conserva_las_preguntas(tmp_path, capsys):
+    cliente = ai.ClienteClaude(cliente=_SDKFalso(stop_reason="refusal", bloques=[]))
+    salida = _procesar(tmp_path, "b.gift", GIFT, cliente)
+    assert salida == GIFT.strip() + "\n"
+    assert "declinó" in capsys.readouterr().out
+
+
+def test_modelo_por_defecto_segun_proveedor():
+    assert ai.modelo_por_defecto("claude") == "claude-opus-5"
+    assert ai.modelo_por_defecto("gemini").startswith("gemini")

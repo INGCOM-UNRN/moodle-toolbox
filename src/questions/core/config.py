@@ -57,3 +57,37 @@ def save_typesafe_key(api_key: str):
     if not ENV_FILE.exists():
         ENV_FILE.touch(mode=0o600)
     set_key(str(ENV_FILE), "TYPESAFE_API_KEY", api_key)
+
+
+def _leer(variable: str):
+    load_dotenv()
+    valor = os.getenv(variable)
+    if not valor and ENV_FILE.exists():
+        load_dotenv(ENV_FILE)
+        valor = os.getenv(variable)
+    return valor
+
+
+def get_anthropic_key():
+    """ANTHROPIC_API_KEY del entorno o de ~/.questions/.env (si no hay, el SDK prueba sus otras fuentes)."""
+    return _leer("ANTHROPIC_API_KEY")
+
+
+def get_proveedor() -> str:
+    """Proveedor por defecto de `questions ai`: gemini (histórico) o claude."""
+    return (_leer("QUESTIONS_PROVEEDOR") or "gemini").lower()
+
+
+def save_anthropic_key(api_key: str):
+    """Guarda la ANTHROPIC_API_KEY (Claude, para `ai --proveedor claude`) en la configuración global."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not ENV_FILE.exists():
+        ENV_FILE.touch(mode=0o600)
+    set_key(str(ENV_FILE), "ANTHROPIC_API_KEY", api_key)
+
+
+def save_proveedor(proveedor: str):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not ENV_FILE.exists():
+        ENV_FILE.touch(mode=0o600)
+    set_key(str(ENV_FILE), "QUESTIONS_PROVEEDOR", proveedor)

@@ -1,6 +1,7 @@
 import click
 import typer
 from questions.core.config import save_api_key, get_api_key, delete_api_key, save_model, get_model, save_typesafe_key
+from questions.core.config import save_anthropic_key, save_proveedor
 from questions.core.ai import load_config, list_available_models
 
 config_app = typer.Typer(help="Configuración global de las herramientas.")
@@ -28,6 +29,21 @@ def set_typesafe_key_cmd(api_key: str = typer.Argument(...)):
         click.echo("✅ TYPESAFE_API_KEY guardada correctamente en ~/.questions/.env")
     except Exception as e:
         click.echo(f"❌ Error al guardar la API Key: {e}", err=True)
+
+@config_app.command(name="set-anthropic-key")
+def set_anthropic_key_cmd(api_key: str = typer.Argument(...)):
+    """Configura la ANTHROPIC_API_KEY (Claude) para `ai --proveedor claude`."""
+    try:
+        save_anthropic_key(api_key)
+        click.echo("✅ ANTHROPIC_API_KEY guardada correctamente en ~/.questions/.env")
+    except Exception as e:
+        click.echo(f"❌ Error al guardar la API Key: {e}", err=True)
+
+@config_app.command(name="set-provider")
+def set_provider_cmd(proveedor: str = typer.Argument(..., click_type=click.Choice(["gemini", "claude"]))):
+    """Configura el proveedor por defecto de `questions ai` (gemini o claude)."""
+    save_proveedor(proveedor)
+    click.echo(f"✅ Proveedor por defecto: {proveedor}")
 
 @config_app.command(name="set-model")
 def set_model_cmd(model: str = typer.Argument(...)):

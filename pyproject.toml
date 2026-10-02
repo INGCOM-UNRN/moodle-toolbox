@@ -43,10 +43,11 @@ Repository = "https://github.com/INGCOM-UNRN/moodle-toolbox.git"
 Issues = "https://github.com/INGCOM-UNRN/moodle-toolbox/issues"
 
 [project.optional-dependencies]
-# `questions ai` (Gemini). Es opcional: google-genai arrastra muchas
-# dependencias (cryptography, urllib3, pyasn1, …) que el resto del CLI no usa.
+# `questions ai` (Gemini o Claude). Es opcional: los SDK arrastran muchas
+# dependencias (cryptography, urllib3, pyasn1, httpx2, …) que el resto del CLI no usa.
 ai = [
     "google-genai>=2.4.0",
+    "anthropic>=1.11.0",
 ]
 ui = [
     "flask>=3.0",

@@ -4,7 +4,8 @@ from typing import List, Optional
 import click
 import typer
 
-from questions.core.ai import load_config, run_global_ai_processing, get_model
+from questions.core.ai import PROVEEDORES, cargar_cliente, modelo_por_defecto, run_global_ai_processing
+from questions.core.config import get_proveedor
 from questions.core.banco import expandir_rutas
 from questions.commands.common import LLM_OPTION, fail
 
@@ -21,7 +22,12 @@ def ai(
     ),
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Prompt personalizado o ruta a un archivo .txt con el prompt."),
     output: Optional[Path] = typer.Option(None, "--output", help="Directorio de salida (por defecto: output_<mode>)."),
-    model: Optional[str] = typer.Option(None, "--model", help="Modelo de Gemini (default: configurado o gemini-2.0-flash)."),
+    proveedor: Optional[str] = typer.Option(
+        None, "--proveedor", click_type=click.Choice(PROVEEDORES),
+        help="Modelo de lenguaje para improve/multiply/transform/feedback/distractors: gemini o claude "
+             "(por defecto: QUESTIONS_PROVEEDOR o gemini)."),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="Modelo (por defecto: gemini configurado o gemini-2.0-flash; claude-opus-5 con claude)."),
     recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar subdirectorios recursivamente."),
     batch_size: int = typer.Option(5, "--batch-size", help="Número de preguntas por petición a la API (default: 5)."),
     in_place: bool = typer.Option(False, "-i", "--in-place", help="Escribir en la misma carpeta que el original."),
@@ -58,7 +64,10 @@ def ai(
     if not inputs:
         fail("Debes proporcionar al menos una ruta de entrada.")
 
-    active_model = model or get_model()
+    proveedor = (proveedor or get_proveedor()).lower()
+    if proveedor not in PROVEEDORES:
+        fail(f"Proveedor desconocido: {proveedor} (gemini o claude).")
+    active_model = model or modelo_por_defecto(proveedor)
 
     # Resolver prompt desde archivo si es necesario
     custom_prompt = prompt
@@ -118,7 +127,7 @@ def ai(
     client = None
     if not dry_run:
         try:
-            client = load_config()
+            client = cargar_cliente(proveedor)
         except Exception as e:
             fail(str(e))
 
