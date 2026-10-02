@@ -13,6 +13,7 @@ from questions.core.moodle_health import (
     MIN_OPCIONES,
     UMBRAL_LONGITUD,
     auditar_archivos,
+    escribir_csv,
     generar_reporte_markdown,
     limpiar_html_archivo,
 )
@@ -36,6 +37,8 @@ def health_cmd(
     ),
     max_items: int = typer.Option(50, "--max-items", help="Máximo de preguntas listadas por sección (0: todas)."),
     estricto: bool = typer.Option(False, "--estricto", help="Salir con código 1 también ante advertencias."),
+    output_csv: Optional[Path] = typer.Option(
+        None, "--csv", help="Exportar una fila por pregunta con todas las señales (para planillas)."),
     output_json: bool = typer.Option(False, "--json", help="Emite el diagnóstico como JSON versionado."),
 ):
     """Audita la salud del banco: claves de corrección, feedback, cantidad y longitud de opciones, código y enlaces.
@@ -60,7 +63,12 @@ def health_cmd(
                 if not output_json:
                     click.echo(f"✓ Archivo limpio de etiquetas obsoletas y estilos CSS inline: {archivo}")
 
-    resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud)
+    resultado = auditar_archivos(archivos, min_opciones=min_opciones, umbral_longitud=umbral_longitud,
+                                 con_preguntas=output_csv is not None)
+    if output_csv is not None:
+        filas = escribir_csv(resultado.pop("_preguntas"), output_csv)
+        if not output_json:
+            click.echo(f"✓ {filas} preguntas exportadas a {output_csv}")
 
     if output_json:
         datos = {}

@@ -83,3 +83,25 @@ def test_health_metadatos_de_moodle_por_categoria(tmp_path):
     assert moo["preguntas_revisadas"] == 3
     assert moo["inconsistencias"] == [{"categoria": "C", "tipo": "MC", "campo": "penalty",
                                        "valores": {"0.333333": 2, "0.1": 1}}]
+
+
+def test_health_csv_una_fila_por_pregunta(tmp_path):
+    import csv
+
+    from click.testing import CliRunner
+
+    from questions.cli import cli
+
+    (tmp_path / "b.gift").write_text(
+        "$CATEGORY: $course$/C\n\n// [bloom:B3-aplicar] [dificultad-enunciado:2.5/5]\n"
+        "::A:: ¿Cuál NO es? {=Una respuesta bastante más larga que el resto #bien ~x ~y ####gen}\n\n"
+        "::B:: ¿Cuál? {~%33.33%a ~%33.33%b ~%33.33%c ~d}\n", encoding="utf-8")
+    salida = tmp_path / "salud.csv"
+    res = CliRunner().invoke(cli, ["health", str(tmp_path / "b.gift"), "--csv", str(salida), "--json"])
+    assert '"_preguntas"' not in res.output
+    filas = list(csv.DictReader(salida.open(encoding="utf-8")))
+    a, b = filas
+    assert (a["titulo"], a["categoria"], a["bloom"], a["dificultad_enunciado"]) == ("A", "C", "aplicar", "2.5")
+    assert (a["opciones"], a["correctas"], a["feedback_general"], a["opciones_con_feedback"]) == ("3", "1", "1", "1")
+    assert a["correcta_mas_larga"] == "1" and a["distractores_debiles"] == "2" and a["negacion_sin_resaltar"] == "0"
+    assert b["fraccion_invalida"] == "1" and b["sin_correcta"] == "0"

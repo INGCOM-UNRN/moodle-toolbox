@@ -534,8 +534,13 @@ def auditar_archivos(
     min_opciones: int = MIN_OPCIONES,
     umbral_longitud: float = UMBRAL_LONGITUD,
     contenidos: Optional[Dict[Path, str]] = None,
+    con_preguntas: bool = False,
 ) -> Dict[str, Any]:
-    """Audita un conjunto de archivos GIFT y/o XML como un único banco."""
+    """Audita un conjunto de archivos GIFT y/o XML como un único banco.
+
+    Con `con_preguntas`, el resultado lleva también `_preguntas` (las preguntas del modelo
+    con archivo, formato y categoría), para exportarlas; no forma parte del JSON.
+    """
     preguntas: List[dict] = []
     errores: List[dict] = []
     por_formato: Counter = Counter()
@@ -591,6 +596,8 @@ def auditar_archivos(
         "html_obsoleto": html_obsoleto,
     }
     resultado["resumen"] = resumir_hallazgos(resultado)
+    if con_preguntas:
+        resultado["_preguntas"] = preguntas
     return resultado
 
 
@@ -654,6 +661,67 @@ def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
         "total_errores": sum(e["cantidad"] for e in errores),
         "total_advertencias": sum(a["cantidad"] for a in advertencias),
     }
+
+
+# ---------------------------------------------------------------------------
+# Exportación por pregunta (CSV)
+# ---------------------------------------------------------------------------
+
+COLUMNAS_CSV = (
+    "archivo", "formato", "categoria", "titulo", "tipo", "opciones", "correctas", "feedback_general",
+    "opciones_con_feedback", "razon_longitud", "correcta_mas_larga", "fraccion_invalida", "sin_correcta",
+    "codigo_sin_cerrar", "negacion_sin_resaltar", "opcion_problematica", "distractores_debiles",
+    "bloom", "dificultad_enunciado", "dificultad_respuestas",
+)
+
+
+def fila_csv(p: dict) -> Dict[str, Any]:
+    """Las señales de una pregunta como una fila plana."""
+    opciones = p.get("choices", [])
+    fracciones = [_fraccion(o) for o in opciones]
+    textos = [_plano(_texto(o.get("text"))) for o in opciones]
+    largos = [len(t) for t in textos]
+    correctas = [n for n, f in zip(largos, fracciones) if f > 0]
+    distractores = [n for n, f in zip(largos, fracciones) if f <= 0]
+    razon = round(mean(correctas) / mean(distractores), 2) if correctas and distractores and mean(distractores) else ""
+    retros = [o.get("feedback") for o in opciones] if p.get("type") != "TF" else [p.get("trueFeedback"), p.get("falseFeedback")]
+    textos_todos = [p.get("stem"), p.get("globalFeedback")] + [o.get("text") for o in opciones] + retros
+    meta = p.get("metadata") or {}
+    return {
+        "archivo": p.get("filepath", ""),
+        "formato": p.get("formato", ""),
+        "categoria": p.get("categoria", ""),
+        "titulo": p.get("title") or "",
+        "tipo": p.get("type", ""),
+        "opciones": len(opciones) + len(p.get("matchPairs", [])),
+        "correctas": sum(1 for f in fracciones if f > 0),
+        "feedback_general": int(bool(_texto(p.get("globalFeedback")).strip())),
+        "opciones_con_feedback": sum(1 for r in retros if _texto(r).strip()),
+        "razon_longitud": razon,
+        "correcta_mas_larga": int(len(correctas) == 1 and bool(distractores) and correctas[0] > max(distractores)),
+        "fraccion_invalida": int(any(not _fraccion_valida(f) for f in fracciones)),
+        "sin_correcta": int(p.get("type") in ("MC", "Short", "Numerical") and bool(opciones) and not any(f > 0 for f in fracciones)),
+        "codigo_sin_cerrar": int(any(_backticks_desbalanceados(_texto(t)) for t in textos_todos)),
+        "negacion_sin_resaltar": int(bool(_sin_resaltar(_texto(p.get("stem"))))),
+        "opcion_problematica": int(any(_OPCION_PROBLEMATICA.search(t) for t in textos)),
+        "distractores_debiles": sum(1 for n in distractores if correctas and max(correctas) >= 20 and n < 0.25 * max(correctas)),
+        "bloom": meta.get("bloom", ""),
+        "dificultad_enunciado": meta.get("dificultad_enunciado", ""),
+        "dificultad_respuestas": meta.get("dificultad_respuestas", ""),
+    }
+
+
+def escribir_csv(preguntas: Iterable[dict], destino: Path) -> int:
+    """Escribe una fila por pregunta evaluable. Devuelve cuántas filas escribió."""
+    import csv
+
+    filas = [fila_csv(p) for p in _evaluables(preguntas)]
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with destino.open("w", encoding="utf-8", newline="") as f:
+        escritor = csv.DictWriter(f, fieldnames=COLUMNAS_CSV)
+        escritor.writeheader()
+        escritor.writerows(filas)
+    return len(filas)
 
 
 # ---------------------------------------------------------------------------
