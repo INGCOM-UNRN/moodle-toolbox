@@ -48,13 +48,6 @@ def _escape_gift(text: str, context: str = "stem") -> str:
     return out
 
 
-def _strip_html(text: str) -> str:
-    """Convierte HTML simple de Moodle a texto plano legible."""
-    if not text:
-        return ""
-    return convert_html_tags_to_markdown(text)
-
-
 def _cdata(s: str) -> str:
     s = s.replace("]]>", "]]]]><![CDATA[>")
     return f"{_CD_OPEN}{s}{_CD_CLOSE}"
@@ -276,8 +269,11 @@ def gift_to_xml(gift_content: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Moodle XML -> GIFT
+# Moodle XML -> GIFT (sobre el modelo unificado)
 # ---------------------------------------------------------------------------
+
+_TIPOS_GIFT = ("MC", "Short", "TF", "Matching", "Numerical", "Essay", "Description")
+
 
 def _text_de(el, default=""):
     """Extrae texto del hijo <text> de un elemento (con o sin CDATA)."""
@@ -289,156 +285,72 @@ def _text_de(el, default=""):
     return t.text if t.text is not None else default
 
 
-def _texto_respuesta(ans: ET.Element) -> str:
-    t = ans.find("text")
-    return (t.text or "") if t is not None else ""
-
-
-def _feedback_de(ans: ET.Element) -> str:
-    fb = ans.find("feedback")
-    return _text_de(fb).strip() if fb is not None else ""
-
-
-def _simbolo_respuesta(fraccion) -> str:
-    """Símbolo GIFT para una respuesta según su fracción ('=', '~' o '~%N%')."""
-    try:
-        frac = float(fraccion)
-    except (TypeError, ValueError):
-        return "="
-    if abs(frac - 100.0) < 0.01:
-        return "="
-    if abs(frac) < 0.01:
-        return "~"
-    return f"~%{frac:g}%"
-
-
-def _peso_gift(fraccion) -> str | None:
-    """Peso explícito para la primera respuesta numérica; None si es '='."""
-    try:
-        frac = float(fraccion)
-    except (TypeError, ValueError):
-        return None
-    if abs(frac - 100.0) < 0.01:
-        return None
-    if abs(frac) < 0.01:
-        return ""
-    return f"%{frac:g}%"
-
-
-def _prefijo_formato(formato: str) -> str:
-    # En GIFT el formato por defecto ya importa como html/auto_format;
-    # sólo hace falta marcar los formatos no predeterminados.
-    return "[markdown]" if formato == "markdown" else ""
-
-
-def _xml_pregunta_a_gift(q: ET.Element) -> str:
-    qtype = (q.get("type") or "").lower()
-
-    if qtype == "category":
-        ruta = _text_de(q.find("category")).replace("$course$", "").strip()
-        return f"$CATEGORY: $course${'/' + ruta.lstrip('/') if ruta else ''}".rstrip()
-
+def _sin_equivalente_gift(q: ET.Element) -> str:
+    """Cloze y tipos de plugins: GIFT no los representa; se conservan título y enunciado
+    (las respuestas embebidas de un cloze quedan en el texto) y, si no es cloze, un {}."""
     titulo = _escape_gift(_text_de(q.find("name")).strip(), "title")
-
-    qt_el = q.find("questiontext")
-    stem = _text_de(qt_el).strip()
-    formato = (qt_el.get("format") if qt_el is not None else "") or "html"
-    if formato == "html":
-        stem = _strip_html(stem)
-    prefijo = _prefijo_formato(formato)
-
-    gf = _strip_html(_text_de(q.find("generalfeedback"))).strip()
-    global_fb = f"####{_escape_gift(gf, 'answer')}" if gf else ""
-
-    bloque = ""
-
-    if qtype in ("multichoice", "shortanswer"):
-        partes = []
-        for ans in q.findall("answer"):
-            texto = _strip_html(_texto_respuesta(ans)).strip() if qtype == "multichoice" else _texto_respuesta(ans).strip()
-            feedback = _strip_html(_feedback_de(ans)).strip()
-            parte = f"{_simbolo_respuesta(ans.get('fraction', '0'))}{_escape_gift(texto, 'answer')}"
-            if feedback:
-                parte += f" #{_escape_gift(feedback, 'answer')}"
-            partes.append(parte)
-        bloque = "{" + "\n".join(partes) + "}" if partes else "{}"
-
-    elif qtype == "truefalse":
-        verdadera = None
-        retro = {"true": "", "false": ""}
-        for ans in q.findall("answer"):
-            bajo = _texto_respuesta(ans).strip().lower()
-            if bajo not in retro:
-                continue
-            if ans.get("fraction") == "100":
-                verdadera = (bajo == "true")
-            retro[bajo] = _strip_html(_feedback_de(ans)).strip()
-        letra = "T" if verdadera else "F"
-        partes_fb = []
-        if retro["true"]:
-            partes_fb.append(f"{_escape_gift(retro['true'], 'answer')}")
-        if retro["false"]:
-            partes_fb.append(f"{_escape_gift(retro['false'], 'answer')}")
-        cuerpo_fb = "#" + "#".join(partes_fb) if partes_fb else ""
-        bloque = "{" + letra + cuerpo_fb + "}"
-
-    elif qtype == "matching":
-        partes = []
-        for sq in q.findall("subquestion"):
-            izq = _strip_html(_text_de(sq)).strip()
-            der = _strip_html(_text_de(sq.find("answer"))).strip()
-            partes.append(f"={_escape_gift(izq, 'answer')} -> {_escape_gift(der, 'answer')}")
-        bloque = "{" + "\n".join(partes) + "}" if partes else "{}"
-
-    elif qtype == "numerical":
-        partes = []
-        primera = True
-        for ans in q.findall("answer"):
-            numero = _texto_respuesta(ans).strip()
-            tol_el = ans.find("tolerance")
-            if tol_el is not None and (tol_el.text or "").strip():
-                numero = f"{numero}:{tol_el.text.strip()}"
-            feedback = _strip_html(_feedback_de(ans)).strip()
-            peso = _peso_gift(ans.get("fraction", "0"))
-            if primera and peso is None:
-                simbolo = ""  # forma canónica: {#23.5 ...} sin prefijo
-            elif peso is None:
-                simbolo = "="
-            else:
-                simbolo = "~" + peso
-            primera = False
-            parte = f"{simbolo}{_escape_gift(numero, 'answer')}"
-            if feedback:
-                parte += f" #{_escape_gift(feedback, 'answer')}"
-            partes.append(parte)
-        bloque = "{#" + "\n".join(partes) + "}" if partes else "{}"
-
-    elif qtype == "cloze":
-        # Los bloques {...} viven embebidos en el enunciado: se preservan tal cual.
-        bloque = ""
-
-    elif qtype == "essay":
-        bloque = "{}"
-
-    elif qtype == "description":
-        linea = f"::{titulo}::{prefijo}{_escape_gift(stem, 'stem')}".rstrip()
-        if global_fb:
-            linea += "\n" + global_fb
-        return linea
-
-    else:
-        bloque = "{}"
-
+    qt = q.find("questiontext")
+    formato = (qt.get("format") if qt is not None else "") or "html"
+    prefijo = {"markdown": "[markdown]", "html": "[html]"}.get(formato, "")
+    bloque = "" if (q.get("type") or "").lower() in ("cloze", "multianswer") else " {}"
     encabezado = f"::{titulo}:: " if titulo else ""
-    cuerpo = f"{prefijo}{_escape_gift(stem, 'stem')} {bloque}".rstrip()
-    salida = encabezado + cuerpo
-    if global_fb:
-        salida += "\n" + global_fb
-    return salida
+    return f"{encabezado}{prefijo}{_escape_gift(_text_de(qt).strip(), 'stem')}{bloque}".rstrip()
+
+
+def _seguro_para_gift(gift: str) -> str:
+    """Lo que GIFT no puede representar crudo dentro del código, con su forma protegida.
+
+    Una línea vacía o de sólo espacios (también U+2007 o NBSP) corta la pregunta → `↵`;
+    una línea que empieza con `//` es un comentario de GIFT → `／／`; un `->` en las
+    opciones convierte la pregunta en emparejamiento → `-＞`. El resto del código queda
+    igual (los demás caracteres ya los escapa `_escape_gift`).
+    """
+    from questions.core.codigo import MARCA_SALTO, transformar_secciones
+
+    def proteger(codigo: str, html: bool, multilinea: bool) -> str:
+        lineas = codigo.split("\n")
+        ultima = len(lineas) - 1
+        for i, linea in enumerate(lineas):
+            if 0 < i < ultima and not linea.strip():
+                linea = MARCA_SALTO
+            elif linea.lstrip().startswith("//"):
+                sangria = linea[: len(linea) - len(linea.lstrip())]
+                linea = sangria + "／／" + linea.lstrip()[2:]
+            lineas[i] = linea.replace("->", "-＞")
+        return "\n".join(lineas)
+
+    def parrafos(texto: str) -> str:
+        # Fuera del código, una línea en blanco (párrafo de markdown) se escribe con el
+        # escape \\n de GIFT, que Moodle y el parser vuelven a convertir en salto de línea;
+        # una línea que empieza con // (código sin backticks) también se protege.
+        texto = re.sub(r"(?m)^([ \t\u3000\u2007\u00a0]*)//", "\\1／／", texto)
+        return re.sub(r"\n((?:[ \t]*\n)+)", lambda m: "\n" + "\\n" * m.group(1).count("\n"), texto)
+
+    from questions.core.codigo import fuera_de_codigo
+
+    return fuera_de_codigo(transformar_secciones(gift, proteger, "gift")[0], parrafos, "gift")
 
 
 def xml_to_gift(xml_content: str) -> str:
-    """Convierte contenido Moodle XML a GIFT usando el modelo unificado de preguntas."""
+    """Convierte contenido Moodle XML a GIFT: XML → modelo unificado → GIFT.
+
+    El formato de cada texto se conserva con su prefijo ([html], [markdown]); el HTML no
+    se reescribe como markdown (eso es `convert html-to-md`).
+    """
+    from questions.core.moodle_xml import _pregunta
+
     raiz = ET.fromstring(xml_content)
-    bloques = [_xml_pregunta_a_gift(q) for q in raiz.findall("question")]
+    nodos = [raiz] if raiz.tag == "question" else raiz.findall("question")
+    bloques = []
+    for nodo in nodos:
+        q = _pregunta(nodo)
+        if q.type == "Category":
+            ruta = (q.title or "").replace("$course$", "").strip().strip("/")
+            bloques.append(f"$CATEGORY: $course${'/' + ruta if ruta else ''}")
+        elif q.type in _TIPOS_GIFT:
+            # idnumber y tags viajan en el comentario que GIFT (y el parser) entienden.
+            meta = ([f"[id:{q.id}]"] if q.id else []) + [f"[tag:{t}]" for t in q.tags]
+            bloques.append((f"// {' '.join(meta)}\n" if meta else "") + _seguro_para_gift(question_to_gift(q)))
+        else:
+            bloques.append(_sin_equivalente_gift(nodo))
     return "\n\n".join(b for b in bloques if b.strip()) + ("\n" if bloques else "")

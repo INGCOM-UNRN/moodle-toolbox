@@ -36,3 +36,53 @@ def test_gift_a_xml_conserva_lineas_en_blanco_del_codigo_y_es_valido():
     texto = ET.fromstring(xml).find("question/questiontext/text").text
     assert "int a = 1 < 2 && 3;\n\n    return a;" in texto
     assert "<![CDATA[" in xml
+
+
+XML_PARRAFOS = """<?xml version="1.0" encoding="UTF-8"?>
+<quiz><question type="multichoice">
+<name><text>Linkage</text></name>
+<questiontext format="markdown"><text><![CDATA[Considere `module.c`:
+
+```c
+int a = 1;
+  
+// comentario
+```
+#ifdef WINDOWS
+// código A
+#endif]]></text></questiontext>
+<answer fraction="100"><text><![CDATA[`p->x`]]></text></answer>
+<answer fraction="0"><text>otra</text></answer>
+<idnumber>L-1</idnumber>
+<tags><tag><text>enlace</text></tag></tags>
+</question></quiz>"""
+
+
+def test_xml_a_gift_sobre_el_modelo_es_gift_valido_y_sin_perdidas():
+    from questions.core.codigo import transformar_codigo
+    from questions.core.converter import xml_to_gift
+    from questions.core.moodle_xml import parse_xml
+
+    gift = xml_to_gift(XML_PARRAFOS)
+    assert gift.startswith("// [id:L-1] [tag:enlace]\n::Linkage::[markdown]")
+    pregunta = parse_gift(gift)["questions"][0]
+    original = parse_xml(XML_PARRAFOS)["questions"][0]
+    assert pregunta["type"] == "MC" and pregunta["id"] == "L-1" and pregunta["tags"] == ["enlace"]
+
+    def normal(t):
+        t = transformar_codigo(t, fullwidth=False)[0]
+        return "\n".join(linea.rstrip() for linea in t.split("\n"))
+
+    # Párrafos (\n), líneas de sólo espacios en el código (↵), // y -> (protegidos).
+    assert normal(pregunta["stem"]["text"]) == normal(original["stem"]["text"]).replace("// código A", "／／ código A")
+    assert normal(pregunta["choices"][0]["text"]["text"]) == "`p->x`"
+
+
+def test_xml_a_gift_conserva_el_html_con_su_prefijo():
+    from questions.core.converter import xml_to_gift
+
+    xml = ('<quiz><question type="truefalse"><name><text>VF</text></name><questiontext format="html">'
+           '<text><![CDATA[<p>¿<b>Cierto</b>?</p>]]></text></questiontext>'
+           '<answer fraction="100"><text>true</text></answer><answer fraction="0"><text>false</text></answer>'
+           '</question></quiz>')
+    assert xml_to_gift(xml) == "::VF::[html]<p>¿<b>Cierto</b>?</p>\n{T}\n"
