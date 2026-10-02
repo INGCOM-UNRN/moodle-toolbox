@@ -1,6 +1,6 @@
 import click
 import typer
-from questions.core.config import save_api_key, get_api_key, delete_api_key, save_model, get_model
+from questions.core.config import save_api_key, get_api_key, delete_api_key, save_model, get_model, save_typesafe_key
 from questions.core.ai import load_config, list_available_models
 
 config_app = typer.Typer(help="Configuración global de las herramientas.")
@@ -17,6 +17,15 @@ def set_key_cmd(api_key: str = typer.Argument(...)):
     try:
         save_api_key(api_key)
         click.echo("✅ API Key guardada correctamente en ~/.questions/.env")
+    except Exception as e:
+        click.echo(f"❌ Error al guardar la API Key: {e}", err=True)
+
+@config_app.command(name="set-typesafe-key")
+def set_typesafe_key_cmd(api_key: str = typer.Argument(...)):
+    """Configura la TYPESAFE_API_KEY (Jev) para `ai --mode classify`."""
+    try:
+        save_typesafe_key(api_key)
+        click.echo("✅ TYPESAFE_API_KEY guardada correctamente en ~/.questions/.env")
     except Exception as e:
         click.echo(f"❌ Error al guardar la API Key: {e}", err=True)
 

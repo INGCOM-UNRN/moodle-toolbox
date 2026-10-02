@@ -50,3 +50,10 @@ def delete_api_key():
     """Elimina la API Key configurada."""
     if ENV_FILE.exists():
         ENV_FILE.unlink()
+
+def save_typesafe_key(api_key: str):
+    """Guarda la TYPESAFE_API_KEY (Jev, usada por `ai --mode classify`) en la configuración global."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if not ENV_FILE.exists():
+        ENV_FILE.touch(mode=0o600)
+    set_key(str(ENV_FILE), "TYPESAFE_API_KEY", api_key)
