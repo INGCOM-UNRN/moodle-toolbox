@@ -89,6 +89,7 @@ class Unidad:
     marcas: bool = False       # el código original usaba marcas · / ↵
     forma: tuple = ()          # ver _forma
     pregunta: Optional[Question] = None               # modelo unificado del original
+    solo_feedback: bool = False                       # ai --mode feedback: sólo se agrega retro
     procesado: List[Question] = field(default_factory=list)
     procesado_gift: List[str] = field(default_factory=list)
 
@@ -210,6 +211,17 @@ def construir_prompt(textos: List[str], mode: str, custom_prompt: Optional[str] 
         if custom_prompt:
             instruccion += f"\nInstrucción adicional: {custom_prompt}"
         salida = f"{VARIACIONES} preguntas por cada una recibida, cada una precedida por su marcador"
+    elif mode == "feedback":
+        instruccion = (
+            "Sos experto en pedagogía y en el formato GIFT de Moodle. Completá SÓLO la retroalimentación que "
+            "falta en cada pregunta: a cada opción sin `#` agregale una explicación breve de por qué es correcta "
+            "o incorrecta (el error conceptual que revela), y si no tiene retroalimentación general (`####`), "
+            "agregala. En verdadero/falso, `{T#para quien responde mal#para quien acierta}`. No cambies el "
+            "título, el enunciado, las opciones ni la retroalimentación que ya existe."
+        )
+        if custom_prompt:
+            instruccion += f"\nInstrucción adicional: {custom_prompt}"
+        salida = "una pregunta por cada una recibida"
     else:  # transform
         instruccion = (
             "Sos experto en el formato GIFT de Moodle. Transformá cada pregunta según estas instrucciones:\n"
@@ -286,7 +298,7 @@ def aplicar_respuesta(unidades: List[Unidad], respuesta: Dict[int, List[str]], m
                 print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): el modelo cambió el tipo "
                       f"{unidad.tipo} → {interpretado[1].type}; se conserva el original.")
                 continue
-            if mode == "improve" and _forma(interpretado[1]) != unidad.forma:
+            if mode in ("improve", "feedback") and _forma(interpretado[1]) != unidad.forma:
                 # Típico de un = o ~ crudo fuera del código que parte una opción.
                 print(f"  ⚠️ Pregunta {numero} ({unidad.archivo.name}): cambió la cantidad de opciones o de "
                       "correctas; se conserva el original.")
@@ -297,9 +309,55 @@ def aplicar_respuesta(unidades: List[Unidad], respuesta: Dict[int, List[str]], m
         if not validas:
             sin_cambios += 1
             continue
+        if mode == "feedback":
+            # Del resultado sólo se toma la retroalimentación que faltaba; lo demás es el original.
+            completa, agregadas = completar_feedback(unidad.pregunta, validas[0][1])
+            if not agregadas:
+                sin_cambios += 1
+                continue
+            unidad.solo_feedback = True
+            unidad.procesado = [completa]
+            unidad.procesado_gift = [question_to_gift(completa)]
+            continue
         unidad.procesado_gift = [g for g, _ in validas]
         unidad.procesado = [q for _, q in validas]
     return sin_cambios
+
+
+def _hay(ft) -> bool:
+    return ft is not None and bool((ft.text or "").strip())
+
+
+def falta_feedback(q: Question) -> bool:
+    """True si a la pregunta le falta alguna retroalimentación (general o de una opción)."""
+    if not _hay(q.global_feedback):
+        return True
+    if q.type == "TF":
+        return not (_hay(q.true_feedback) and _hay(q.false_feedback))
+    return any(not _hay(c.feedback) for c in q.choices)
+
+
+def completar_feedback(original: Question, nueva: Question) -> tuple:
+    """El original con la retroalimentación que le faltaba tomada de `nueva`.
+
+    Nunca reemplaza una retroalimentación existente ni toma ningún otro cambio.
+    Devuelve (pregunta, cantidad de retroalimentaciones agregadas).
+    """
+    completa = copy.deepcopy(original)
+    agregadas = 0
+    if not _hay(completa.global_feedback) and _hay(nueva.global_feedback):
+        completa.global_feedback = copy.deepcopy(nueva.global_feedback)
+        agregadas += 1
+    if completa.type == "TF":
+        for campo in ("true_feedback", "false_feedback"):
+            if not _hay(getattr(completa, campo)) and _hay(getattr(nueva, campo)):
+                setattr(completa, campo, copy.deepcopy(getattr(nueva, campo)))
+                agregadas += 1
+    for c, n in zip(completa.choices, nueva.choices):
+        if not _hay(c.feedback) and _hay(n.feedback):
+            c.feedback = copy.deepcopy(n.feedback)
+            agregadas += 1
+    return completa, agregadas
 
 
 def process_batch(client, model_id: str, unidades: List[Unidad], mode: str,
@@ -447,10 +505,48 @@ def escribir_xml(archivo: Archivo) -> str:
             quiz.append(s)
         elif not s.procesado:
             quiz.append(s.elemento)
+        elif s.solo_feedback:
+            quiz.append(agregar_feedback_xml(s.elemento, s.procesado[0], s))
         else:
             for i, q in enumerate(s.procesado):
                 quiz.append(aplicar_a_xml(s.elemento, q, s, variacion=i > 0))
     return serializar_quiz(quiz)
+
+
+def agregar_feedback_xml(original: ET.Element, q: Question, unidad: Unidad) -> ET.Element:
+    """Copia el <question> original y sólo completa los <feedback> y el <generalfeedback> vacíos."""
+    if unidad.fullwidth:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=True,
+                                      espacios=unidad.marcas, saltos=unidad.marcas)[0]
+    else:
+        def adaptar(texto):
+            return transformar_codigo(texto or "", contexto="xml", fullwidth=False)[0]
+
+    el = copy.deepcopy(original)
+    formato = (el.find("questiontext").get("format") if el.find("questiontext") is not None else None) or "html"
+
+    def completar(padre: ET.Element, tag: str, ft) -> None:
+        if not _hay(ft):
+            return
+        nodo = padre.find(tag)
+        if nodo is None:
+            nodo = ET.SubElement(padre, tag, {"format": formato})
+        if not (nodo.findtext("text") or "").strip():
+            _poner_texto(nodo, adaptar(ft.text))
+
+    completar(el, "generalfeedback", q.global_feedback)
+    respuestas = el.findall("answer")
+    if q.type == "TF":
+        por_valor = {(a.findtext("text") or "").strip().lower(): a for a in respuestas}
+        if "true" in por_valor:
+            completar(por_valor["true"], "feedback", q.true_feedback)
+        if "false" in por_valor:
+            completar(por_valor["false"], "feedback", q.false_feedback)
+    else:
+        for a, c in zip(respuestas, q.choices):
+            completar(a, "feedback", c.feedback)
+    return el
 
 
 def escribir(archivo: Archivo) -> str:
@@ -474,6 +570,8 @@ def run_global_ai_processing(client, model_id: str, file_paths: List[Path], outp
     print(f"🔍 Escaneando {len(file_paths)} archivos...")
     archivos = leer_archivos(file_paths)
     unidades = unidades_de(archivos)
+    if mode == "feedback":
+        unidades = [u for u in unidades if u.pregunta is not None and falta_feedback(u.pregunta)]
     if not unidades:
         print("⚠️ No se encontraron preguntas para procesar.")
         return

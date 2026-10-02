@@ -175,3 +175,46 @@ def test_xml_conserva_los_comentarios(tmp_path):
     con_comentario = XML.replace("<quiz>", "<quiz>\n  <!-- question: 1854266 -->", 1)
     salida = _procesar(tmp_path, "b.xml", con_comentario, Modelo())
     assert "<!-- question: 1854266 -->" in salida
+
+
+def _con_feedback(n, texto):
+    """Modelo que completa feedback y, además, intenta reescribir el enunciado y un feedback existente."""
+    texto = texto.replace("¿Qué imprime?", "¿Qué muestra en pantalla?").replace("#Bien", "#Muy bien")
+    lineas = []
+    for linea in texto.splitlines():
+        s = linea.strip()
+        if s.startswith(("=", "~")) and "#" not in s:
+            linea += " #Explicación de " + s[1:].strip()
+        lineas.append(linea)
+    lineas.insert(len(lineas) - 1, "\t####Repasá el concepto.")
+    return ["\n".join(lineas)]
+
+
+def test_feedback_completa_solo_lo_que_falta_en_gift(tmp_path):
+    modelo = Modelo(_con_feedback)
+    salida = _procesar(tmp_path, "b.gift", GIFT, modelo, mode="feedback")
+    q = parse_gift(salida)["questions"][1]
+    assert "¿Qué imprime?" in q["stem"]["text"]
+    retros = [c["feedback"]["text"] for c in q["choices"]]
+    assert retros == ["Bien", "Explicación de nada", "Explicación de error"]
+    assert q["globalFeedback"]["text"] == "Repasá el concepto."
+    assert salida.startswith("$CATEGORY: $course$/Java\n\n// [tag:java] [id:J-1]\n")
+    assert "if （a ⩵ b） ｛↵" in salida
+
+
+def test_feedback_en_xml_solo_toca_los_nodos_de_retroalimentacion(tmp_path):
+    salida = _procesar(tmp_path, "b.xml", XML, Modelo(_con_feedback), mode="feedback")
+    pregunta = ET.fromstring(salida).findall("question")[1]
+    assert [a.findtext("feedback/text") for a in pregunta.findall("answer")] == [
+        "Sí", "Explicación de 0", "Explicación de basura"]
+    assert pregunta.findtext("generalfeedback/text") == "Repasá el concepto."
+    assert pregunta.findtext("questiontext/text") == ET.fromstring(XML).findall("question")[1].findtext("questiontext/text")
+    assert pregunta.findtext("penalty") == "0.5"
+
+
+def test_feedback_saltea_las_preguntas_completas(tmp_path, capsys):
+    archivo = tmp_path / "c.gift"
+    archivo.write_text("::C:: ¿Sí? {=a #bien ~b #mal ####general}\n", encoding="utf-8")
+    modelo = Modelo(_con_feedback)
+    ai.run_global_ai_processing(modelo, "simulado", [archivo], tmp_path / "salida", "feedback")
+    assert modelo.prompts == [] and "No se encontraron preguntas" in capsys.readouterr().out

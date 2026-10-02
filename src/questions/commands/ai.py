@@ -14,9 +14,9 @@ def ai(
     llm: bool = LLM_OPTION,
     mode: str = typer.Option(
         "improve", "--mode",
-        click_type=click.Choice(["improve", "multiply", "transform", "classify"]),
-        help="Modo: improve (mejorar), multiply (variaciones), transform (usar prompt personalizado) "
-             "o classify (Bloom y dificultad con Jev).",
+        click_type=click.Choice(["improve", "multiply", "transform", "feedback", "classify"]),
+        help="Modo: improve (mejorar), multiply (variaciones), transform (usar prompt personalizado), "
+             "feedback (completar sólo la retroalimentación que falta) o classify (Bloom y dificultad con Jev).",
     ),
     prompt: Optional[str] = typer.Option(None, "--prompt", help="Prompt personalizado o ruta a un archivo .txt con el prompt."),
     output: Optional[Path] = typer.Option(None, "--output", help="Directorio de salida (por defecto: output_<mode>)."),
