@@ -362,10 +362,21 @@ def diagnosticar_codigo(texto: str, contexto: str = "xml") -> dict:
     - `sin_proteger`: código con caracteres que GIFT interpretaría (sin escapar).
     - `variantes`: marcas históricas (U+2007, NBSP, U+037E…) en lugar de `·` y `；`.
     - `lineas_vacias`: líneas en blanco dentro del código (en GIFT cortan la pregunta).
+    - `comentarios`: secciones con líneas que empiezan con `//` sin proteger (GIFT y
+      Moodle las descartan como comentarios: el código se muestra sin ellas).
+    - `sin_lenguaje`: bloques ``` sin etiqueta de lenguaje (sin resaltado en Moodle).
     """
-    resultado = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
-
-    def revisar(codigo: str, html: bool, multilinea: bool) -> str:
+    resultado = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
+                 "comentarios": 0, "sin_lenguaje": 0}
+    for m in _SECCIONES[contexto].finditer(texto):
+        if m.group("fence"):
+            codigo, html, multilinea = m.group("bloque"), False, True
+            if not m.group("lang").strip():
+                resultado["sin_lenguaje"] += 1
+        elif m.group("abre"):
+            codigo, html, multilinea = m.group("html"), True, m.group("tag").lower() == "pre"
+        else:
+            codigo, html, multilinea = m.group("linea"), False, False
         resultado["secciones"] += 1
         plano = _sin_entidades(codigo) if html else codigo
         if contexto == "gift":
@@ -376,7 +387,6 @@ def diagnosticar_codigo(texto: str, contexto: str = "xml") -> dict:
             resultado["variantes"] += 1
         if multilinea and re.search(r"\n[ \t]*\n", codigo):
             resultado["lineas_vacias"] += 1
-        return codigo
-
-    transformar_secciones(texto, revisar, contexto)
+        if re.search(r"(?m)^[ \t]*//", plano):
+            resultado["comentarios"] += 1
     return resultado

@@ -140,7 +140,10 @@ def test_diagnostico_con_el_mismo_criterio_en_ambos_formatos():
     assert diagnosticar_codigo(GIFT, "gift")["sin_proteger"] == 2
     assert diagnosticar_codigo(GIFT, "gift")["lineas_vacias"] == 1
     fw, _ = transformar_codigo(GIFT, contexto="gift", fullwidth=True)
-    assert diagnosticar_codigo(fw, "gift") == {"secciones": 3, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
+    assert diagnosticar_codigo(fw, "gift") == {"secciones": 3, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
+                                               "comentarios": 0, "sin_lenguaje": 0}
+    assert diagnosticar_codigo("```\nint a;\n// nota\n```", "gift")["comentarios"] == 1
+    assert diagnosticar_codigo("```\nint a;\n```\n```c\nint b;\n```")["sin_lenguaje"] == 1
     # GIFT escapado (forma normal) no cuenta como sin proteger.
     assert diagnosticar_codigo("`a \\= b`", "gift")["sin_proteger"] == 0
     assert diagnosticar_codigo("`a \\= b`", "xml")["sin_proteger"] == 1

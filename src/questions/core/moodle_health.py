@@ -446,7 +446,8 @@ def auditar_texto(contenido: str, formato: str) -> Dict[str, Any]:
     """Enlaces, HTML obsoleto y código de un archivo (GIFT o XML)."""
     if formato == "xml":
         textos = _textos_xml(contenido)
-        codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
+        codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
+                  "comentarios": 0, "sin_lenguaje": 0}
         for t in textos:
             for clave, valor in diagnosticar_codigo(t, "xml").items():
                 codigo[clave] += valor
@@ -545,7 +546,8 @@ def auditar_archivos(
     errores: List[dict] = []
     por_formato: Counter = Counter()
     enlaces = {"total_urls": 0, "urls_sospechosas": [], "todas_validas": True}
-    codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0}
+    codigo = {"secciones": 0, "sin_proteger": 0, "variantes": 0, "lineas_vacias": 0,
+              "comentarios": 0, "sin_lenguaje": 0}
     archivos_codigo: List[dict] = []
     html_obsoleto: List[dict] = []
     archivos = list(archivos)
@@ -579,7 +581,7 @@ def auditar_archivos(
             {**u, "archivo": str(ruta)} for u in texto["enlaces"]["urls_sospechosas"])
         for clave, valor in texto["codigo"].items():
             codigo[clave] += valor
-        if texto["codigo"]["sin_proteger"] or texto["codigo"]["variantes"] or texto["codigo"]["lineas_vacias"]:
+        if any(texto["codigo"][k] for k in ("sin_proteger", "variantes", "lineas_vacias", "comentarios", "sin_lenguaje")):
             archivos_codigo.append({"archivo": str(ruta), **texto["codigo"]})
         if texto["html_obsoleto"]:
             html_obsoleto.append({"archivo": str(ruta), "ocurrencias": texto["html_obsoleto"]})
@@ -651,6 +653,10 @@ def resumir_hallazgos(resultado: Dict[str, Any]) -> Dict[str, Any]:
         ("codigo_xml_sin_proteger", "archivos XML con código sin proteger (se rompería al pasar a GIFT)",
          sum(1 for a in codigo_xml if a["sin_proteger"] or a["lineas_vacias"])),
         ("marcas_no_canonicas", "archivos con marcas no canónicas en el código", sum(1 for a in cod["archivos"] if a["variantes"])),
+        ("comentarios_en_codigo", "archivos con líneas // en el código sin proteger (GIFT y Moodle las descartan)",
+         sum(1 for a in cod["archivos"] if a.get("comentarios"))),
+        ("codigo_sin_lenguaje", "archivos con bloques ``` sin etiqueta de lenguaje",
+         sum(1 for a in cod["archivos"] if a.get("sin_lenguaje"))),
         ("enlaces_sospechosos", "enlaces http:// o locales", len(resultado["enlaces"]["urls_sospechosas"])),
         ("html_obsoleto", "archivos con HTML obsoleto", len(resultado["html_obsoleto"])),
     )
@@ -952,11 +958,14 @@ def generar_reporte_markdown(resultado: Dict[str, Any], nombre: str, max_items: 
     lineas.append(f"- Secciones de código: {cod['secciones']}")
     lineas.append(f"- Sin proteger para GIFT (`{{ }} = ~ # \\` o `//` sin fullwidth ni escape): {cod['sin_proteger']}")
     lineas.append(f"- Con marcas no canónicas (U+2007, NBSP, `;` griego… en lugar de `·` y `；`): {cod['variantes']}")
-    lineas.append(f"- Con líneas en blanco sin `↵`: {cod['lineas_vacias']}\n")
+    lineas.append(f"- Con líneas en blanco sin `↵`: {cod['lineas_vacias']}")
+    lineas.append(f"- Con líneas `//` sin proteger (se pierden al importar): {cod.get('comentarios', 0)}")
+    lineas.append(f"- Bloques ``` sin etiqueta de lenguaje (`questions fix code-lang` la agrega): {cod.get('sin_lenguaje', 0)}\n")
     if cod["archivos"]:
         lineas.append("> [!TIP]\n> `questions format --fullwidth` protege el código y agrega las marcas `·` y `↵`.\n")
         _lista(lineas, cod["archivos"],
-               lambda i: f"{i['sin_proteger']} sin proteger, {i['variantes']} con variantes, {i['lineas_vacias']} con líneas en blanco",
+               lambda i: f"{i['sin_proteger']} sin proteger, {i['variantes']} con variantes, {i['lineas_vacias']} con líneas en blanco, "
+                         f"{i.get('comentarios', 0)} con //, {i.get('sin_lenguaje', 0)} sin lenguaje",
                max_items)
 
     lineas.append("## Enlaces y HTML")
