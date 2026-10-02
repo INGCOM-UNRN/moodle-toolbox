@@ -7,7 +7,7 @@ from enum import Enum
 
 # Versión del contrato de datos GIFT que consumen otras herramientas (scorm-tools
 # `from-gift`). Subir la mayor si cambia la forma del dict de `parse_gift`.
-GIFT_CONTRACT_VERSION = "1.0.0"
+GIFT_CONTRACT_VERSION = "1.0.1"  # 1.0.1: retro de V/F en el orden de Moodle
 
 
 class QuestionType(Enum):

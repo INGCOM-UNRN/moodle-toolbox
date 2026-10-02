@@ -246,8 +246,14 @@ def question_to_gift(q: Question, escapar_codigo: bool = True) -> str:
     elif q.type == "Numerical":
         bloque = "{#\n" + "\n".join("\t" + opcion(c, numerica=True) for c in q.choices) + (f"\n\t{general.strip()}" if general else "") + "\n}"
     elif q.type == "TF":
-        partes = [retro(q.true_feedback).strip(), retro(q.false_feedback).strip()]
-        bloque = "{" + ("T" if q.is_true else "F") + "".join(p for p in partes if p) + general + "}"
+        # Como Moodle: primero la retro para quien responde mal, después para quien acierta.
+        mal, bien = (q.false_feedback, q.true_feedback) if q.is_true else (q.true_feedback, q.false_feedback)
+        retros = ""
+        if _ft_text(mal) or _ft_text(bien):
+            retros = "#" + _escape_gift(_ft_text(mal), "answer")
+            if _ft_text(bien):
+                retros += "#" + _escape_gift(_ft_text(bien), "answer")
+        bloque = "{" + ("T" if q.is_true else "F") + retros + general + "}"
     elif q.type == "Matching":
         pares = [f"\t={_escape_gift(_ft_text(p.subquestion), 'answer')} -> {_escape_gift(p.subanswer or '', 'answer')}"
                  for p in q.match_pairs]

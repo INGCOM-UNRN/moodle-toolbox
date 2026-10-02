@@ -86,3 +86,24 @@ def test_xml_a_gift_conserva_el_html_con_su_prefijo():
            '<answer fraction="100"><text>true</text></answer><answer fraction="0"><text>false</text></answer>'
            '</question></quiz>')
     assert xml_to_gift(xml) == "::VF::[html]<p>¿<b>Cierto</b>?</p>\n{T}\n"
+
+
+def test_verdadero_falso_en_el_orden_de_moodle():
+    """{T#mal#bien}: la primera retro es para quien responde mal (Moodle, qformat_gift)."""
+    import xml.etree.ElementTree as ET
+
+    from questions.core.converter import gift_to_xml, xml_to_gift
+
+    v = parse_gift("::V:: ¿Sí? {T#Repasá#Bien ####general}")["questions"][0]
+    assert v["trueFeedback"]["text"] == "Bien" and v["falseFeedback"]["text"] == "Repasá"
+    assert v["globalFeedback"]["text"] == "general"
+    f = parse_gift("::F:: ¿No? {F#Repasá#Bien}")["questions"][0]
+    assert f["trueFeedback"]["text"] == "Repasá" and f["falseFeedback"]["text"] == "Bien"
+    solo_bien = parse_gift("::S:: ¿Sí? {T##Bien}")["questions"][0]
+    assert solo_bien["trueFeedback"]["text"] == "Bien" and "falseFeedback" not in solo_bien
+
+    xml = gift_to_xml("::V:: ¿Sí? {T#Repasá#Bien}")
+    retro = {a.findtext("text"): a.findtext("feedback/text") for a in ET.fromstring(xml).find("question").findall("answer")}
+    assert retro == {"true": "Bien", "false": "Repasá"}
+    assert "{T#Repasá#Bien}" in xml_to_gift(xml)
+    assert "{T##Bien}" in xml_to_gift(gift_to_xml("::S:: ¿Sí? {T##Bien}"))

@@ -208,26 +208,22 @@ class GiftParser:
         if not block:
             return Question(type="Essay")
         
-        # True/False
-        tf_match = re.match(r'^(TRUE|FALSE|T|F)\s*(?:#(.*))?$', block, re.IGNORECASE | re.DOTALL)
+        # True/False. Como en Moodle: {T#retro si responde mal#retro si responde bien};
+        # el modelo guarda cada una en la opción a la que corresponde (true/false).
+        general = None
+        gf_match = re.search(r'####(.*)$', block, re.DOTALL)
+        cuerpo = block[:gf_match.start()].strip() if gf_match else block
+        tf_match = re.match(r'^(TRUE|FALSE|T|F)\s*(#.*)?$', cuerpo, re.IGNORECASE | re.DOTALL)
         if tf_match:
             is_true = tf_match.group(1).upper() in ('TRUE', 'T')
-            feedback_text = tf_match.group(2) or ""
-            feedbacks = self._parse_tf_feedback(feedback_text, semantics)
-            
+            mal, bien = self._parse_tf_feedback(tf_match.group(2) or "", semantics)
             q = Question(type="TF", is_true=is_true)
-            if len(feedbacks) > 0:
-                q.true_feedback = feedbacks[0]
-            if len(feedbacks) > 1:
-                q.false_feedback = feedbacks[1]
-            
-            # Check for global feedback
-            gf_match = re.search(r'####(.+)$', block, re.DOTALL)
-            if gf_match:
-                q.global_feedback = semantics._parse_formatted_text(gf_match.group(1))
-            
+            q.true_feedback, q.false_feedback = (bien, mal) if is_true else (mal, bien)
+            if gf_match and gf_match.group(1).strip():
+                general = semantics._parse_formatted_text(gf_match.group(1))
+            q.global_feedback = general
             return q
-        
+
         # Numerical
         if block.startswith('#'):
             return self._parse_numerical(block[1:], semantics)
@@ -239,20 +235,16 @@ class GiftParser:
         # Multiple choice or short answer
         return self._parse_mc_or_short(block, semantics)
     
-    def _parse_tf_feedback(self, text: str, semantics: GiftSemantics) -> list:
-        """Parse True/False feedback."""
-        feedbacks = []
-        if not text:
-            return feedbacks
-        
-        # Split by # but not ####
-        parts = re.split(r'(?<!#)#(?!###)', text)
-        for part in parts:
-            if part.strip() and not part.strip().startswith('###'):
-                feedbacks.append(semantics._parse_formatted_text(part))
-        
-        return feedbacks
-    
+    def _parse_tf_feedback(self, text: str, semantics: GiftSemantics) -> tuple:
+        """(retro si responde mal, retro si responde bien) de `#mal#bien` (cualquiera vacía → None)."""
+        if not text.startswith('#'):
+            return None, None
+        partes = _partir_sin_escapar(text, "#")
+        mal = partes[0] if partes else ""
+        bien = "#".join(partes[1:]) if len(partes) > 1 else ""
+        convertir = lambda t: semantics._parse_formatted_text(t) if t.strip() else None  # noqa: E731
+        return convertir(mal), convertir(bien)
+
     def _parse_numerical(self, block: str, semantics: GiftSemantics) -> Question:
         """Parse numerical answer."""
         choices = []
