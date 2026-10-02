@@ -210,6 +210,55 @@ def _serializar_quiz(quiz: ET.Element) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n{cuerpo}\n'
 
 
+def question_to_gift(q: Question, escapar_codigo: bool = True) -> str:
+    """Serializa una Question del modelo unificado a GIFT (sin comentarios ni categoría).
+
+    Los textos se escapan; el código ya protegido (fullwidth) no tiene nada que escapar.
+    Con `escapar_codigo` en falso el código queda tal cual (la forma que se le envía a
+    un LLM: el resultado se protege antes de interpretarlo).
+    """
+    if not escapar_codigo:
+        from questions.core.codigo import fuera_de_codigo
+
+        def _escape_gift(texto, contexto="stem", _escapar=globals()["_escape_gift"]):
+            return fuera_de_codigo(texto or "", lambda t: _escapar(t, contexto))
+    else:
+        _escape_gift = globals()["_escape_gift"]
+    prefijo = {"markdown": "[markdown]", "html": "[html]", "plain": "[plain]"}.get(
+        (q.stem.format if q.stem else "moodle") or "moodle", "")
+    encabezado = f"::{_escape_gift(q.title, 'title')}::" if q.title else ""
+    enunciado = prefijo + _escape_gift(_ft_text(q.stem), "stem")
+
+    def retro(ft, marca="#") -> str:
+        return f" {marca}{_escape_gift(_ft_text(ft), 'answer')}" if ft is not None and _ft_text(ft) else ""
+
+    def opcion(c, numerica=False) -> str:
+        if c.weight is not None:
+            simbolo = ("=" if c.is_correct else "~") + f"%{c.weight:g}%"
+        else:
+            simbolo = "=" if c.is_correct else "~"
+        texto = _ft_text(c.text)
+        return simbolo + (texto if numerica else _escape_gift(texto, "answer")) + retro(c.feedback)
+
+    general = retro(q.global_feedback, "####")
+    if q.type in ("MC", "Short"):
+        bloque = "{\n" + "\n".join("\t" + opcion(c) for c in q.choices) + (f"\n\t{general.strip()}" if general else "") + "\n}"
+    elif q.type == "Numerical":
+        bloque = "{#\n" + "\n".join("\t" + opcion(c, numerica=True) for c in q.choices) + (f"\n\t{general.strip()}" if general else "") + "\n}"
+    elif q.type == "TF":
+        partes = [retro(q.true_feedback).strip(), retro(q.false_feedback).strip()]
+        bloque = "{" + ("T" if q.is_true else "F") + "".join(p for p in partes if p) + general + "}"
+    elif q.type == "Matching":
+        pares = [f"\t={_escape_gift(_ft_text(p.subquestion), 'answer')} -> {_escape_gift(p.subanswer or '', 'answer')}"
+                 for p in q.match_pairs]
+        bloque = "{\n" + "\n".join(pares) + (f"\n\t{general.strip()}" if general else "") + "\n}"
+    elif q.type == "Essay":
+        bloque = "{" + general + "}"
+    else:  # Description
+        return (encabezado + enunciado).strip()
+    return f"{encabezado}{enunciado}\n{bloque}"
+
+
 def gift_to_xml(gift_content: str) -> str:
     """Convierte contenido GIFT a Moodle XML usando el modelo unificado de preguntas."""
     preguntas = GiftParser()._manual_parse(gift_content or "")
