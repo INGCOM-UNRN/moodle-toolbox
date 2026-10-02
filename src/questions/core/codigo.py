@@ -100,7 +100,7 @@ def _marcar(texto: str, espacios: bool, saltos: bool, primera_es_linea: bool) ->
             sangria = linea[: len(linea) - len(cuerpo)]
             linea = sangria.replace("\t", "    ").replace(" ", MARCA_ESPACIO) + cuerpo
         # Una última línea en blanco también lleva `↵` (en GIFT cortaría la pregunta).
-        lleva_salto = i < ultima or (i == ultima > 0 and not linea.strip(" \t" + MARCA_ESPACIO))
+        lleva_salto = i < ultima or (primera_es_linea and i == ultima > 0 and not linea.strip(" \t" + MARCA_ESPACIO))
         if saltos and lleva_salto and not linea.endswith(MARCA_SALTO):
             linea += MARCA_SALTO
         salida.append(linea)
@@ -147,6 +147,7 @@ def transformar_fragmento(
     saltos: bool = True,
     html: bool = False,
     multilinea: bool = True,
+    escapes: bool = True,
 ) -> str:
     """Transforma el contenido de UNA sección de código.
 
@@ -155,12 +156,15 @@ def transformar_fragmento(
     agregan las marcas `·` y `↵` (sólo si no se está restaurando). `html` indica que
     el código está dentro de `<pre>`/`<code>`: las entidades se interpretan al
     proteger y `< > &` se vuelven a escapar al restaurar. `multilinea` en falso
-    indica código en línea (su primera línea no es una línea propia).
+    indica código en línea (su primera línea no es una línea propia). `escapes` en
+    falso indica que el código de un GIFT viene crudo (sin `\\{`, `\\\\`…), como el
+    que devuelve un LLM: entonces no se desescapa.
     """
     gift = contexto == "gift"
+    desescapar = gift and escapes
 
     if fullwidth is False:
-        if gift:
+        if desescapar:
             codigo = _ESCAPE_GIFT.sub(r"\1", codigo)
         codigo = _restaurar(_sin_entidades(codigo) if html else codigo, conservar_lineas_vacias=gift)
         if html:
@@ -170,7 +174,7 @@ def transformar_fragmento(
         return codigo
 
     if fullwidth:
-        if gift:
+        if desescapar:
             codigo = _ESCAPE_GIFT.sub(r"\1", codigo)
         codigo = _a_fullwidth(_sin_entidades(codigo))
     else:
@@ -221,6 +225,16 @@ def transformar_secciones(
     return _SECCIONES[contexto].sub(reemplazar, texto), cambios
 
 
+def fuera_de_codigo(texto: str, funcion: Callable[[str], str], contexto: str = "xml") -> str:
+    """Aplica `funcion` sólo al texto que NO es código (p. ej. escapar GIFT)."""
+    piezas, ultimo = [], 0
+    for m in _SECCIONES[contexto].finditer(texto):
+        piezas += [funcion(texto[ultimo:m.start()]), m.group(0)]
+        ultimo = m.end()
+    piezas.append(funcion(texto[ultimo:]))
+    return "".join(piezas)
+
+
 def transformar_codigo(
     texto: str,
     *,
@@ -228,16 +242,33 @@ def transformar_codigo(
     fullwidth: bool | None = True,
     espacios: bool = True,
     saltos: bool = True,
+    escapes: bool = True,
 ) -> tuple[str, int]:
     """Transforma todas las secciones de código de un texto (ver `transformar_fragmento`)."""
 
     def funcion(codigo: str, html: bool, multilinea: bool) -> str:
         return transformar_fragmento(
             codigo, contexto=contexto, fullwidth=fullwidth, espacios=espacios,
-            saltos=saltos, html=html, multilinea=multilinea,
+            saltos=saltos, html=html, multilinea=multilinea, escapes=escapes,
         )
 
     return transformar_secciones(texto, funcion, contexto)
+
+
+def usa_convencion(texto: str, contexto: str = "xml") -> tuple[bool, bool]:
+    """(símbolos fullwidth, marcas) que usa el código del texto, para restaurar la misma
+    convención después de transformarlo."""
+    hallado = {"fullwidth": False, "marcas": False}
+
+    def revisar(codigo: str, html: bool, multilinea: bool) -> str:
+        if any(c in _A_NORMAL and c not in _VARIANTES_ESPACIO and c != MARCA_ESPACIO for c in codigo):
+            hallado["fullwidth"] = True
+        if any(c in codigo for c in (MARCA_ESPACIO, MARCA_SALTO) + tuple(_VARIANTES_ESPACIO)):
+            hallado["marcas"] = True
+        return codigo
+
+    transformar_secciones(texto, revisar, contexto)
+    return hallado["fullwidth"], hallado["marcas"]
 
 
 # ---------------------------------------------------------------------------
