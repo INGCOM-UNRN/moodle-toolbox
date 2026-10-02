@@ -169,3 +169,32 @@ def code_lang(
             modified_count += 1
 
     click.echo(f"\nFinalizado: {modified_count} archivos {'a modificar' if dry_run else 'modificados'}.")
+
+@fix_app.command(name="code-format")
+def code_format(
+    paths: Optional[List[str]] = typer.Argument(None, exists=True),
+    recursive: bool = typer.Option(False, "-r", "--recursive", help="Procesar recursivamente"),
+    estilo: Optional[str] = typer.Option(
+        None, "--estilo", help="Estilo de clang-format (por defecto: LLVM con 4 espacios, regla 0x0005h)."),
+    dry_run: bool = typer.Option(False, "-n", "--dry-run", help="No aplicar cambios"),
+):
+    """Formatea el código C y Java de las preguntas con clang-format, conservando la convención de cada archivo."""
+    from questions.core.formato_codigo import ESTILO, comando_clang_format, formatear_archivo
+
+    comando = comando_clang_format()
+    if comando is None:
+        click.echo("Error: hace falta clang-format (o uvx para usar el paquete de PyPI).", err=True)
+        raise typer.Exit(code=1)
+    files = expandir_rutas(paths or ['.'], recursive, ('.gift', '.xml', '.md'))
+
+    modified_count = 0
+    for f in sorted(files):
+        content = f.read_text(encoding='utf-8')
+        new_content, count = formatear_archivo(content, formato_de(f) or "md", comando, estilo or ESTILO)
+        if count > 0:
+            if not dry_run:
+                f.write_text(new_content, encoding='utf-8')
+            click.echo(f"{'[SIMULACIÓN] ' if dry_run else '✓ '}{f}: {count} bloques formateados")
+            modified_count += 1
+
+    click.echo(f"\nFinalizado: {modified_count} archivos {'a modificar' if dry_run else 'modificados'}.")
